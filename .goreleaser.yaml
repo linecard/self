@@ -1,0 +1,12 @@
+# .goreleaser.yml
+project_name: self
+builds:
+  - main: ./src/self.go
+    binary: self
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64

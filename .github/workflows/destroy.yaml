@@ -1,0 +1,23 @@
+name: destroy
+on: delete
+
+jobs:
+  untag:
+    if: github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::677771948337:role/github-ecr-access
+          aws-region: us-west-2
+      - name: Setup Go Caching
+        uses: actions/setup-go@v4.1.0
+        with:
+            go-version: "1.21.7"
+            cache-dependency-path: "${{ matrix.function }}/src/go.sum"
+      - run: go run src/self.go untag --tag ${{ github.event.ref }}
