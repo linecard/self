@@ -1,5 +1,5 @@
-# .goreleaser.yml
 project_name: self
+
 builds:
   - main: ./src/self.go
     binary: self
@@ -10,3 +10,9 @@ builds:
     goarch:
       - amd64
       - arm64
+    env:
+      - CGO_ENABLED=0
+    ldflags: 
+      - '-extldflags "-static"'
+    flags:
+      - -trimpath
