@@ -12,9 +12,12 @@ import (
 )
 
 // InitOtel initializes OpenTelemetry tracing and returns the context, tracer provider, and shutdown function.
-func InitOtel() (context.Context, *sdktrace.TracerProvider, func()) {
+func InitOtel() (ctx context.Context, tp *sdktrace.TracerProvider, shutdown func()) {
+	ctx = context.Background()
+	tp = sdktrace.NewTracerProvider()
+	shutdown = func() {}
+
 	if util.OtelConfigPresent() {
-		ctx := context.Background()
 		client := otlptracegrpc.NewClient()
 
 		exp, err := otlptrace.New(ctx, client)
@@ -22,19 +25,16 @@ func InitOtel() (context.Context, *sdktrace.TracerProvider, func()) {
 			log.Fatalf("failed to initialize grpc exporter: %v", err)
 		}
 
-		tp := sdktrace.NewTracerProvider(
+		tp = sdktrace.NewTracerProvider(
 			sdktrace.WithBatcher(exp))
 
-		shutdown := func() {
+		shutdown = func() {
 			_ = exp.Shutdown(ctx)
 			_ = tp.Shutdown(ctx)
 		}
-
-		otel.SetTracerProvider(tp)
-
-		return ctx, tp, shutdown
 	}
 
-	noopProvider := &sdktrace.TracerProvider{}
-	return context.Background(), noopProvider, func() {}
+	otel.SetTracerProvider(tp)
+
+	return ctx, tp, shutdown
 }
