@@ -74,6 +74,11 @@ func InLambda() bool {
 	return inLambda
 }
 
+func OtelConfigPresent() bool {
+	_, present := os.LookupEnv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	return present
+}
+
 func RoleArnFromAssumeRoleArn(arn string) (string, error) {
 	if !strings.Contains(arn, "assumed-role") {
 		return "", fmt.Errorf("no assumed role found in ARN; self assumable role is the only valid type of caller")
