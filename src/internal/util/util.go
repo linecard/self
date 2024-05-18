@@ -9,8 +9,7 @@ import (
 )
 
 func DeSlasher(str string) string {
-	deslashed := strings.Replace(str, "/", "-", -1)
-	return strings.ToLower(deslashed)
+	return strings.Replace(str, "/", "-", -1)
 }
 
 func ReSlasher(str string) string {
