@@ -54,13 +54,14 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 
 		release, err := api.Release.Find(ctx, cfg.Git.Branch)
 		if err != nil {
-			log.Fatalf("failed to find release: %v", err)
+			return fmt.Errorf("failed to find release: %v", err)
 		}
 
 		sha, err := labelgun.DecodeLabel(cfg.Label.Sha, release.Config.Labels)
 		if err != nil {
+			err := fmt.Errorf("failed to decode sha label: %v", err)
 			span.SetStatus(codes.Error, err.Error())
-			log.Fatalf("failed to decode sha label: %v", err)
+			return err
 		}
 
 		span.SetAttributes(
@@ -69,15 +70,15 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 
 		deployment, err := api.Deployment.Deploy(ctx, release, cfg.Git.Branch, cfg.Function.Name)
 		if err != nil {
-			log.Fatalf("failed to deploy release: %v", err)
+			return fmt.Errorf("failed to deploy release: %v", err)
 		}
 
 		if err := api.Subscription.Converge(ctx, deployment); err != nil {
-			log.Fatalf("failed to converge subscriptions: %v", err)
+			return fmt.Errorf("failed to converge subscriptions: %v", err)
 		}
 
 		if err := api.Httproxy.Converge(ctx, deployment, cfg.Git.Branch); err != nil {
-			log.Fatalf("failed to converge gateway httproxy: %v", err)
+			return fmt.Errorf("failed to converge gateway httproxy: %v", err)
 		}
 
 	case "DELETE":
@@ -89,26 +90,26 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 
 		deployment, err := api.Deployment.Find(ctx, cfg.Git.Branch, cfg.Function.Name)
 		if err != nil {
-			log.Fatalf("failed to find deployment: %v", err)
+			return fmt.Errorf("failed to find deployment: %v", err)
 		}
 
 		subscriptions, err := api.Subscription.List(ctx, deployment)
 		if err != nil {
-			log.Fatalf("failed to list subscriptions: %v", err)
+			return fmt.Errorf("failed to list subscriptions: %v", err)
 		}
 
 		for _, subscription := range subscriptions {
 			if err := api.Subscription.Disable(ctx, deployment, subscription); err != nil {
-				log.Fatalf("failed to disable subscription: %v", err)
+				return fmt.Errorf("failed to disable subscription: %v", err)
 			}
 		}
 
 		if err := api.Httproxy.Unmount(ctx, deployment); err != nil {
-			log.Fatalf("failed to umount gateway httproxy: %v", err)
+			return fmt.Errorf("failed to unmount gateway httproxy: %v", err)
 		}
 
 		if err = api.Deployment.Destroy(ctx, deployment); err != nil {
-			log.Fatalf("failed to destroy deployment: %v", err)
+			return fmt.Errorf("failed to destroy deployment: %v", err)
 		}
 
 	default:

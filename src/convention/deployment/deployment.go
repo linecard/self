@@ -106,7 +106,7 @@ func (c Convention) ListNameSpace(ctx context.Context, namespace string) ([]Depl
 }
 
 func (c Convention) Deploy(ctx context.Context, release release.Release, namespace, functionName string) (Deployment, error) {
-	ctx, span := otel.Tracer("").Start(ctx, "depployment.Deploy")
+	ctx, span := otel.Tracer("").Start(ctx, "deployment.Deploy")
 	defer span.End()
 
 	resource := c.Config.ResourceName(namespace, functionName)
