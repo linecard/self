@@ -14,5 +14,5 @@ COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifica
 COPY --chmod=755 ./bin/docker /bin/docker
 COPY --chmod=+x --from=build /src/main /var/task/main
 
-ENTRYPOINT ["/opt/entry", "-p", "/linecard/self/sef", "--"]
+ENTRYPOINT ["/opt/entry", "-p", "/linecard/self/self", "--"]
 CMD ["/var/task/main"]
