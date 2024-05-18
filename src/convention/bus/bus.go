@@ -12,6 +12,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	dockerTypes "github.com/docker/docker/api/types"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type RegistryService interface {
@@ -80,13 +82,18 @@ func (c Convention) List(ctx context.Context, d deployment.Deployment) ([]Subscr
 	var delete []Subscription
 	var noop []Subscription
 
+	ctx, span := otel.Tracer("").Start(ctx, "deployment.List")
+	defer span.End()
+
 	definitions, err := c.listDefined(ctx, d)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return []Subscription{}, err
 	}
 
 	active, err := c.listEnabled(ctx, d)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return []Subscription{}, err
 	}
 
@@ -98,6 +105,7 @@ func (c Convention) List(ctx context.Context, d deployment.Deployment) ([]Subscr
 		if c.containsRule(definitions, *activeRule.Rule.Name) {
 			expression, err := c.Config.Template(c.getExpression(definitions, *activeRule.Rule.Name))
 			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				return []Subscription{}, err
 			}
 
@@ -129,6 +137,7 @@ func (c Convention) List(ctx context.Context, d deployment.Deployment) ([]Subscr
 		if !c.containsRule(active, *definedRule.Rule.Name) {
 			expression, err := c.Config.Template(c.getExpression(definitions, *definedRule.Rule.Name))
 			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				return []Subscription{}, err
 			}
 
@@ -151,7 +160,16 @@ func (c Convention) List(ctx context.Context, d deployment.Deployment) ([]Subscr
 }
 
 func (c Convention) Disable(ctx context.Context, d deployment.Deployment, s Subscription) error {
-	return c.Service.Event.Delete(ctx, *s.Bus.Name, *s.Rule.Name, *d.Configuration.FunctionName, *d.Configuration.FunctionArn)
+	ctx, span := otel.Tracer("").Start(ctx, "bus.Disable")
+	defer span.End()
+
+	err := c.Service.Event.Delete(ctx, *s.Bus.Name, *s.Rule.Name, *d.Configuration.FunctionName, *d.Configuration.FunctionArn)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	return nil
 }
 
 func (c Convention) Enable(ctx context.Context, d deployment.Deployment, s Subscription) error {
@@ -187,20 +205,26 @@ func (c Convention) DisableAll(ctx context.Context, d deployment.Deployment) err
 }
 
 func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error {
+	ctx, span := otel.Tracer("").Start(ctx, "bus.Converge")
+	defer span.End()
+
 	subscriptions, err := c.List(ctx, d)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
 	for _, subscription := range subscriptions {
 		if subscription.Meta.Destroy {
 			if err := c.Disable(ctx, d, subscription); err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				return err
 			}
 		}
 
 		if subscription.Meta.Update {
 			if err := c.Enable(ctx, d, subscription); err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				return err
 			}
 		}

@@ -10,6 +10,8 @@ import (
 	"github.com/linecard/self/convention/release"
 	"github.com/linecard/self/internal/labelgun"
 	"github.com/linecard/self/internal/util"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -60,9 +62,13 @@ func FromServices(c config.Config, f FunctionService, r RegistryService) Convent
 }
 
 func (c Convention) Find(ctx context.Context, namespace, functionName string) (Deployment, error) {
+	ctx, span := otel.Tracer("").Start(ctx, "deployment.Find")
+	defer span.End()
+
 	resource := c.Config.ResourceName(namespace, functionName)
 	lambda, err := c.Service.Function.Inspect(ctx, resource)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
@@ -100,30 +106,38 @@ func (c Convention) ListNameSpace(ctx context.Context, namespace string) ([]Depl
 }
 
 func (c Convention) Deploy(ctx context.Context, release release.Release, namespace, functionName string) (Deployment, error) {
+	ctx, span := otel.Tracer("").Start(ctx, "deployment.Deploy")
+	defer span.End()
+
 	resource := c.Config.ResourceName(namespace, functionName)
 
 	roleTemplate, err := labelgun.DecodeLabel(c.Config.Label.Role, release.Config.Labels)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
 	roleDocument, err := c.Config.Template(roleTemplate)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
 	policyTemplate, err := labelgun.DecodeLabel(c.Config.Label.Policy, release.Config.Labels)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
 	policyDocument, err := c.Config.Template(policyTemplate)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
 	sha, err := labelgun.DecodeLabel(c.Config.Label.Sha, release.Config.Labels)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
@@ -140,15 +154,18 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 	if labelgun.HasLabel(c.Config.Label.Resources, release.Config.Labels) {
 		resourcesTemplate, err := labelgun.DecodeLabel(c.Config.Label.Resources, release.Config.Labels)
 		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
 			return Deployment{}, err
 		}
 
 		resourcesDocument, err := c.Config.Template(resourcesTemplate)
 		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
 			return Deployment{}, err
 		}
 
 		if err := json.Unmarshal([]byte(resourcesDocument), &resources); err != nil {
+			span.SetStatus(codes.Error, err.Error())
 			return Deployment{}, err
 		}
 	}
@@ -164,16 +181,19 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 
 	role, err := c.Service.Function.PutRole(ctx, resource, roleDocument, tags)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
 	policyArn := util.PolicyArnFromName(c.Config.Account.Id, resource)
 	policy, err := c.Service.Function.PutPolicy(ctx, policyArn, policyDocument, tags)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
 	if _, err := c.Service.Function.AttachPolicyToRole(ctx, *policy.Policy.Arn, *role.Role.RoleName); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
@@ -188,6 +208,7 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 		resources.Timeout,
 		tags,
 	); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
@@ -195,28 +216,36 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 }
 
 func (c Convention) Destroy(ctx context.Context, d Deployment) error {
+	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Destroy")
+	defer span.End()
+
 	roleName := util.RoleNameFromArn(*d.Configuration.Role)
 
 	policies, err := c.Service.Function.GetRolePolicies(ctx, roleName)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
 	for _, policy := range policies.AttachedPolicies {
 		if _, err := c.Service.Function.DetachPolicyFromRole(ctx, *policy.PolicyArn, roleName); err != nil {
+			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 
 		if _, err := c.Service.Function.DeletePolicy(ctx, *policy.PolicyArn); err != nil {
+			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 	}
 
 	if _, err = c.Service.Function.DeleteRole(ctx, roleName); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
 	if _, err = c.Service.Function.DeleteFunction(ctx, *d.Configuration.FunctionName); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 

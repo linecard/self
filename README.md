@@ -1,5 +1,5 @@
 # Self
 
-```shell
+```
 write docs
 ```

@@ -9,8 +9,7 @@ import (
 )
 
 func DeSlasher(str string) string {
-	deslashed := strings.Replace(str, "/", "-", -1)
-	return strings.ToLower(deslashed)
+	return strings.Replace(str, "/", "-", -1)
 }
 
 func ReSlasher(str string) string {
@@ -73,6 +72,11 @@ func PathExists(path string) bool {
 func InLambda() bool {
 	_, inLambda := os.LookupEnv("AWS_LAMBDA_FUNCTION_NAME")
 	return inLambda
+}
+
+func OtelConfigPresent() bool {
+	_, present := os.LookupEnv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	return present
 }
 
 func RoleArnFromAssumeRoleArn(arn string) (string, error) {

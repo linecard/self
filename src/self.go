@@ -1,18 +1,18 @@
 package main
 
 import (
-	"context"
-
 	"github.com/linecard/self/cmd/cli"
 	"github.com/linecard/self/cmd/handler"
+	"github.com/linecard/self/internal/tracing"
 	"github.com/linecard/self/internal/util"
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, tp, shutdown := tracing.InitOtel()
+	defer shutdown()
 
 	if util.InLambda() {
-		handler.Listen(ctx)
+		handler.Listen(tp)
 		return
 	}
 
