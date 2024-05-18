@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/linecard/self/convention/config"
+	"github.com/linecard/self/internal/tracing"
 	"github.com/linecard/self/internal/umwelt"
 	"github.com/linecard/self/sdk"
 
@@ -15,8 +16,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
-func BeforeEach(ctx context.Context, event events.ECRImageActionEvent) {
+func BeforeEach(ctx context.Context, event events.ECRImageActionEvent) (context.Context, func()) {
 	var err error
+
+	ctx, _, shutdown := tracing.InitOtel()
+	defer shutdown()
 
 	awsConfig, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -38,4 +42,6 @@ func BeforeEach(ctx context.Context, event events.ECRImageActionEvent) {
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
+
+	return ctx, shutdown
 }

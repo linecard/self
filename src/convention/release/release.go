@@ -8,6 +8,8 @@ import (
 	"github.com/linecard/self/convention/config"
 	"github.com/linecard/self/internal/labelgun"
 	"github.com/linecard/self/internal/util"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/docker/docker/api/types"
@@ -65,15 +67,21 @@ func FromServices(c config.Config, r RegistryService, b BuildService) Convention
 }
 
 func (c Convention) Find(ctx context.Context, tag string) (Release, error) {
+	span := trace.SpanFromContext(ctx)
+	span.End()
+	span.SetName("release.Find")
+
 	repository := c.Config.Repository.Prefix + "/" + c.Config.Function.Name
 	inspect, err := c.Service.Registry.InspectByTag(ctx, c.Config.Registry.Id, repository, tag)
 
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err
 	}
 
 	uri, err := c.Service.Registry.ImageUri(ctx, c.Config.Registry.Id, c.Config.Registry.Url, repository, tag)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err
 	}
 
