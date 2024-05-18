@@ -18,6 +18,8 @@ func InitOtel() (ctx context.Context, tp *sdktrace.TracerProvider, shutdown func
 	shutdown = func() {}
 
 	if util.OtelConfigPresent() {
+		log.Println("initializing OpenTelemetry with OTLP exporter")
+
 		client := otlptracegrpc.NewClient()
 
 		exp, err := otlptrace.New(ctx, client)
