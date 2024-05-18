@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestRelease(t *testing.T) {
@@ -36,8 +37,8 @@ func TestRelease(t *testing.T) {
 			name: "convention.Find calls service.InspectByTag correctly",
 			setup: func(mbs *mockservice.MockBuildService, mrs *mockservice.MockRegistryService) {
 				mockInspect := mockservice.MockImageInspect(config, nil)
-				mrs.On("InspectByTag", ctx, config.Registry.Id, config.Repository.Prefix+"/"+config.Function.Name, "feature-branch").Return(mockInspect, nil)
-				mrs.On("ImageUri", ctx, config.Registry.Id, config.Registry.Url, config.Repository.Prefix+"/"+config.Function.Name, "feature-branch").Return("mockUri", nil)
+				mrs.On("InspectByTag", mock.Anything, config.Registry.Id, config.Repository.Prefix+"/"+config.Function.Name, "feature-branch").Return(mockInspect, nil)
+				mrs.On("ImageUri", mock.Anything, config.Registry.Id, config.Registry.Url, config.Repository.Prefix+"/"+config.Function.Name, "feature-branch").Return("mockUri", nil)
 			},
 			test: func(t *testing.T, mbs *mockservice.MockBuildService, mrs *mockservice.MockRegistryService) {
 				releases := FromServices(config, mrs, mbs)
@@ -50,7 +51,7 @@ func TestRelease(t *testing.T) {
 			name: "convention.List calls service.List correctly",
 			setup: func(mbs *mockservice.MockBuildService, mrs *mockservice.MockRegistryService) {
 				mockImages := mockservice.MockDescribeImagesOutput()
-				mrs.On("List", ctx, config.Registry.Url, config.Repository.Prefix+"/"+config.Function.Name).Return(mockImages, nil)
+				mrs.On("List", mock.Anything, config.Registry.Url, config.Repository.Prefix+"/"+config.Function.Name).Return(mockImages, nil)
 			},
 			test: func(t *testing.T, mbs *mockservice.MockBuildService, mrs *mockservice.MockRegistryService) {
 				releases := FromServices(config, mrs, mbs)
@@ -75,10 +76,10 @@ func TestRelease(t *testing.T) {
 					"123456789013.dkr.ecr.us-west-2.amazonaws.com/mockOrg/mockRepo/function-one:4eeac06a6b0d37a30bd45775b19e59a06c3b6295",
 				}
 
-				mbs.On("Build", ctx, config.Function.Path, expectedLabels, expectedTags).Return((error)(nil))
+				mbs.On("Build", mock.Anything, config.Function.Path, expectedLabels, expectedTags).Return((error)(nil))
 
 				mockImageInspect := mockservice.MockImageInspect(config, nil)
-				mbs.On("InspectByTag", ctx, config.Registry.Url, config.Repository.Prefix+"/"+config.Function.Name, "4eeac06a6b0d37a30bd45775b19e59a06c3b6295").Return(mockImageInspect, (error)(nil))
+				mbs.On("InspectByTag", mock.Anything, config.Registry.Url, config.Repository.Prefix+"/"+config.Function.Name, "4eeac06a6b0d37a30bd45775b19e59a06c3b6295").Return(mockImageInspect, (error)(nil))
 			},
 			test: func(t *testing.T, mbs *mockservice.MockBuildService, mrs *mockservice.MockRegistryService) {
 				releases := FromServices(config, mrs, mbs)

@@ -47,7 +47,7 @@ func TestDeployment(t *testing.T) {
 		{
 			name: "convention.Find calls service.Inspect correctly.",
 			setup: func(mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
-				mfs.On("Inspect", ctx, "mockRepo-feature-branch-function-one").Return(&getFunctionOutput[0], nil)
+				mfs.On("Inspect", mock.Anything, "mockRepo-feature-branch-function-one").Return(&getFunctionOutput[0], nil)
 			},
 			test: func(t *testing.T, mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
 				var expected Deployment
@@ -64,7 +64,7 @@ func TestDeployment(t *testing.T) {
 		{
 			name: "convention.Find returns error when service.Inspect returns an error.",
 			setup: func(mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
-				mfs.On("Inspect", ctx, "mockRepo-feature-branch-function-2000").Return((*lambda.GetFunctionOutput)(nil), fmt.Errorf("not found"))
+				mfs.On("Inspect", mock.Anything, "mockRepo-feature-branch-function-2000").Return((*lambda.GetFunctionOutput)(nil), fmt.Errorf("not found"))
 			},
 			test: func(t *testing.T, mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
 				deployments := FromServices(config, mfs, mrs)
@@ -77,7 +77,7 @@ func TestDeployment(t *testing.T) {
 		{
 			name: "convention.List calls service.List correctly.",
 			setup: func(mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
-				mfs.On("List", ctx, "mockRepo").Return(getFunctionOutput, nil)
+				mfs.On("List", mock.Anything, "mockRepo").Return(getFunctionOutput, nil)
 			},
 			test: func(t *testing.T, mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
 				var expected []Deployment
@@ -97,7 +97,7 @@ func TestDeployment(t *testing.T) {
 		{
 			name: "convention.List returns error when service.List returns an error.",
 			setup: func(mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
-				mfs.On("List", ctx, "mockRepo").Return(([]lambda.GetFunctionOutput)(nil), fmt.Errorf("not found"))
+				mfs.On("List", mock.Anything, "mockRepo").Return(([]lambda.GetFunctionOutput)(nil), fmt.Errorf("not found"))
 			},
 			test: func(t *testing.T, mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
 				deployments := FromServices(config, mfs, mrs)
@@ -109,7 +109,7 @@ func TestDeployment(t *testing.T) {
 		{
 			name: "convention.ListNameSpace calls service.List and filters namespace tags correctly.",
 			setup: func(mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
-				mfs.On("List", ctx, "mockRepo").Return(getFunctionOutput, nil)
+				mfs.On("List", mock.Anything, "mockRepo").Return(getFunctionOutput, nil)
 			},
 			test: func(t *testing.T, mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
 				deployments := FromServices(config, mfs, mrs)
@@ -126,8 +126,8 @@ func TestDeployment(t *testing.T) {
 
 				// Mocking of the registry service here is a bit of crossing streams, but better than duplicating the logic... I think.
 				mockInspect := servicemock.MockImageInspect(config, nil)
-				mrs.On("InspectByTag", ctx, "123456789013", "mockOrg/mockRepo/function-one", "feature-branch").Return(mockInspect, nil)
-				mrs.On("ImageUri", ctx, config.Registry.Id, config.Registry.Url, "mockOrg/mockRepo/function-one", "feature-branch").Return("123456789013.dkr.ecr.us-west-2.amazonaws.com/mockOrg/mockRepo/function-one@sha256:mockDigest", nil)
+				mrs.On("InspectByTag", mock.Anything, "123456789013", "mockOrg/mockRepo/function-one", "feature-branch").Return(mockInspect, nil)
+				mrs.On("ImageUri", mock.Anything, config.Registry.Id, config.Registry.Url, "mockOrg/mockRepo/function-one", "feature-branch").Return("123456789013.dkr.ecr.us-west-2.amazonaws.com/mockOrg/mockRepo/function-one@sha256:mockDigest", nil)
 
 				tags := map[string]string{
 					"NameSpace": "feature-branch",
@@ -136,21 +136,21 @@ func TestDeployment(t *testing.T) {
 				}
 
 				getRoleOutput := servicemock.MockGetRoleOutput(config, "feature-branch", "function-one")
-				mfs.On("PutRole", ctx, "mockRepo-feature-branch-function-one", mock.Anything, tags).Return(getRoleOutput, nil)
+				mfs.On("PutRole", mock.Anything, "mockRepo-feature-branch-function-one", mock.Anything, tags).Return(getRoleOutput, nil)
 
 				getPolicyOutput := servicemock.MockGetPolicyOutput(config, "feature-branch", "function-one")
-				mfs.On("PutPolicy", ctx, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one", mock.Anything, tags).Return(getPolicyOutput, nil)
+				mfs.On("PutPolicy", mock.Anything, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one", mock.Anything, tags).Return(getPolicyOutput, nil)
 
 				attachOutput := &iam.AttachRolePolicyOutput{}
-				mfs.On("AttachPolicyToRole", ctx, *getPolicyOutput.Policy.Arn, *getRoleOutput.Role.RoleName).Return(attachOutput, nil)
+				mfs.On("AttachPolicyToRole", mock.Anything, *getPolicyOutput.Policy.Arn, *getRoleOutput.Role.RoleName).Return(attachOutput, nil)
 
-				mfs.On("PutFunction", ctx,
+				mfs.On("PutFunction", mock.Anything,
 					"mockRepo-feature-branch-function-one",
 					"arn:aws:iam::123456789012:role/mockRepo-feature-branch-function-one",
 					"123456789013.dkr.ecr.us-west-2.amazonaws.com/mockOrg/mockRepo/function-one@sha256:mockDigest",
 					types.ArchitectureArm64, int32(1024), int32(3072), int32(60), tags).Return(&getFunctionOutput[0], nil)
 
-				mfs.On("Inspect", ctx, "mockRepo-feature-branch-function-one").Return(&getFunctionOutput[0], nil)
+				mfs.On("Inspect", mock.Anything, "mockRepo-feature-branch-function-one").Return(&getFunctionOutput[0], nil)
 			},
 			test: func(t *testing.T, mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
 				var expected Deployment
@@ -172,7 +172,7 @@ func TestDeployment(t *testing.T) {
 		{
 			name: "convention.Destroy calls service.DeleteFunction correctly.",
 			setup: func(mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
-				mfs.On("GetRolePolicies", ctx, "mockRepo-feature-branch-function-one").Return(&iam.ListAttachedRolePoliciesOutput{
+				mfs.On("GetRolePolicies", mock.Anything, "mockRepo-feature-branch-function-one").Return(&iam.ListAttachedRolePoliciesOutput{
 					AttachedPolicies: []iamtypes.AttachedPolicy{
 						{
 							PolicyArn:  aws.String("arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one"),
@@ -185,13 +185,13 @@ func TestDeployment(t *testing.T) {
 					},
 				}, nil)
 
-				mfs.On("DetachPolicyFromRole", ctx, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one", "mockRepo-feature-branch-function-one").Return(&iam.DetachRolePolicyOutput{}, nil)
-				mfs.On("DetachPolicyFromRole", ctx, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one-unknown", "mockRepo-feature-branch-function-one").Return(&iam.DetachRolePolicyOutput{}, nil)
-				mfs.On("DeletePolicy", ctx, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one").Return(&iam.DeletePolicyOutput{}, nil)
-				mfs.On("DeletePolicy", ctx, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one-unknown").Return(&iam.DeletePolicyOutput{}, nil)
+				mfs.On("DetachPolicyFromRole", mock.Anything, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one", "mockRepo-feature-branch-function-one").Return(&iam.DetachRolePolicyOutput{}, nil)
+				mfs.On("DetachPolicyFromRole", mock.Anything, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one-unknown", "mockRepo-feature-branch-function-one").Return(&iam.DetachRolePolicyOutput{}, nil)
+				mfs.On("DeletePolicy", mock.Anything, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one").Return(&iam.DeletePolicyOutput{}, nil)
+				mfs.On("DeletePolicy", mock.Anything, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one-unknown").Return(&iam.DeletePolicyOutput{}, nil)
 
-				mfs.On("DeleteRole", ctx, "mockRepo-feature-branch-function-one").Return(&iam.DeleteRoleOutput{}, nil)
-				mfs.On("DeleteFunction", ctx, "mockRepo-feature-branch-function-one").Return(&lambda.DeleteFunctionOutput{}, nil)
+				mfs.On("DeleteRole", mock.Anything, "mockRepo-feature-branch-function-one").Return(&iam.DeleteRoleOutput{}, nil)
+				mfs.On("DeleteFunction", mock.Anything, "mockRepo-feature-branch-function-one").Return(&lambda.DeleteFunctionOutput{}, nil)
 			},
 			test: func(t *testing.T, mfs *servicemock.MockFunctionService, mrs *servicemock.MockRegistryService) {
 				deployments := FromServices(config, mfs, mrs)
