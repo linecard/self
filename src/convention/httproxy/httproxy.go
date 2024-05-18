@@ -12,8 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2/types"
 	dockerTypes "github.com/docker/docker/api/types"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type GatewayService interface {
@@ -53,9 +53,8 @@ func FromServices(c config.Config, g GatewayService, r RegistryService) Conventi
 }
 
 func (c Convention) Converge(ctx context.Context, d deployment.Deployment, namespace string) error {
-	span := trace.SpanFromContext(ctx)
+	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Converge")
 	defer span.End()
-	span.SetName("httproxy.Converge")
 
 	r, err := d.FetchRelease(ctx, c.Service.Registry, c.Config.Registry.Id)
 	if err != nil {
@@ -136,9 +135,8 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespac
 }
 
 func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error {
-	span := trace.SpanFromContext(ctx)
-	span.End()
-	span.SetName("httproxy.Unmount")
+	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Unmount")
+	defer span.End()
 
 	gw, err := c.Service.Gateway.GetApi(ctx, c.Config.Httproxy.ApiId)
 	if err != nil {

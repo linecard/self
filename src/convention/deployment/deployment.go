@@ -10,8 +10,8 @@ import (
 	"github.com/linecard/self/convention/release"
 	"github.com/linecard/self/internal/labelgun"
 	"github.com/linecard/self/internal/util"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -62,9 +62,8 @@ func FromServices(c config.Config, f FunctionService, r RegistryService) Convent
 }
 
 func (c Convention) Find(ctx context.Context, namespace, functionName string) (Deployment, error) {
-	span := trace.SpanFromContext(ctx)
-	span.End()
-	span.SetName("deployment.Find")
+	ctx, span := otel.Tracer("").Start(ctx, "deployment.Find")
+	defer span.End()
 
 	resource := c.Config.ResourceName(namespace, functionName)
 	lambda, err := c.Service.Function.Inspect(ctx, resource)
@@ -107,9 +106,8 @@ func (c Convention) ListNameSpace(ctx context.Context, namespace string) ([]Depl
 }
 
 func (c Convention) Deploy(ctx context.Context, release release.Release, namespace, functionName string) (Deployment, error) {
-	span := trace.SpanFromContext(ctx)
-	span.End()
-	span.SetName("deployment.Deploy")
+	ctx, span := otel.Tracer("").Start(ctx, "depployment.Deploy")
+	defer span.End()
 
 	resource := c.Config.ResourceName(namespace, functionName)
 
@@ -218,9 +216,8 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 }
 
 func (c Convention) Destroy(ctx context.Context, d Deployment) error {
-	span := trace.SpanFromContext(ctx)
-	span.End()
-	span.SetName("deployment.Destroy")
+	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Destroy")
+	defer span.End()
 
 	roleName := util.RoleNameFromArn(*d.Configuration.Role)
 

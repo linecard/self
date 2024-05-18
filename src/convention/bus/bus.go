@@ -12,8 +12,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	dockerTypes "github.com/docker/docker/api/types"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type RegistryService interface {
@@ -82,9 +82,8 @@ func (c Convention) List(ctx context.Context, d deployment.Deployment) ([]Subscr
 	var delete []Subscription
 	var noop []Subscription
 
-	span := trace.SpanFromContext(ctx)
-	span.End()
-	span.SetName("bus.List")
+	ctx, span := otel.Tracer("").Start(ctx, "deployment.List")
+	defer span.End()
 
 	definitions, err := c.listDefined(ctx, d)
 	if err != nil {
@@ -161,9 +160,8 @@ func (c Convention) List(ctx context.Context, d deployment.Deployment) ([]Subscr
 }
 
 func (c Convention) Disable(ctx context.Context, d deployment.Deployment, s Subscription) error {
-	span := trace.SpanFromContext(ctx)
-	span.End()
-	span.SetName("bus.Disable")
+	ctx, span := otel.Tracer("").Start(ctx, "bus.Disable")
+	defer span.End()
 
 	err := c.Service.Event.Delete(ctx, *s.Bus.Name, *s.Rule.Name, *d.Configuration.FunctionName, *d.Configuration.FunctionArn)
 	if err != nil {
@@ -207,9 +205,8 @@ func (c Convention) DisableAll(ctx context.Context, d deployment.Deployment) err
 }
 
 func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error {
-	span := trace.SpanFromContext(ctx)
+	ctx, span := otel.Tracer("").Start(ctx, "bus.Converge")
 	defer span.End()
-	span.SetName("bus.Converge")
 
 	subscriptions, err := c.List(ctx, d)
 	if err != nil {

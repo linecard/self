@@ -13,10 +13,10 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-lambda-go/otellambda"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/trace"
 )
 
 var cfg config.Config
@@ -34,21 +34,19 @@ func Listen(tp *sdktrace.TracerProvider) {
 
 // Handler function to process ECR image action events.
 func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
-	ctx, completeTrace := BeforeEach(ctx, event)
-	defer completeTrace()
+	BeforeEach(ctx, event)
 
 	if util.ShaLike(event.Detail.ImageTag) {
 		log.Printf("skipping deployment for sha-like tag %s", event.Detail.ImageTag)
 		return nil
 	}
 
-	span := trace.SpanFromContext(ctx)
+	ctx, span := otel.Tracer("").Start(ctx, "handler")
 	defer span.End()
 
 	switch event.Detail.ActionType {
 	case "PUSH":
 		log.Printf("deploying %s:%s", cfg.Function.Name, cfg.Git.Branch)
-		span.SetName("handler.case.PUSH")
 		span.SetAttributes(
 			attribute.String("self.deploy.function", cfg.Function.Name),
 			attribute.String("self.deploy.branch", cfg.Git.Branch),
@@ -84,10 +82,9 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 
 	case "DELETE":
 		log.Printf("destroying %s:%s", cfg.Function.Name, cfg.Git.Branch)
-		span.SetName("handler.case.DELETE")
 		span.SetAttributes(
-			attribute.String("self.deploy.function", cfg.Function.Name),
-			attribute.String("self.deploy.branch", cfg.Git.Branch),
+			attribute.String("self.destroy.function", cfg.Function.Name),
+			attribute.String("self.destroy.branch", cfg.Git.Branch),
 		)
 
 		deployment, err := api.Deployment.Find(ctx, cfg.Git.Branch, cfg.Function.Name)
@@ -115,7 +112,6 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 		}
 
 	default:
-		span.SetName("handler.case.UNKNOWN")
 		err := fmt.Errorf("action type %s not supported", event.Detail.ActionType)
 		span.SetStatus(codes.Error, err.Error())
 		return err
