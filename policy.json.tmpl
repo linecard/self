@@ -26,8 +26,8 @@
                 "kms:Decrypt"
             ],
             "Resource": [
-                "arn:aws:ssm:{{.Region}}:{{.AccountId}}:parameter/self/*",
-                "arn:aws:ssm:{{.Region}}:{{.AccountId}}:parameter/self/env"
+                "arn:aws:ssm:{{.Region}}:{{.AccountId}}:parameter/linecard/self/self/*",
+                "arn:aws:ssm:{{.Region}}:{{.AccountId}}:parameter/linecard/self/self/env"
             ]
         },
         {
