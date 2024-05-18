@@ -1,5 +1,5 @@
 # Self
 
 ```
-write docs and make diffs
+write docs
 ```
