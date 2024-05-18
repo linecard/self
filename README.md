@@ -1,5 +1,2 @@
 # Self
 
-```shell
-write docs
-```
