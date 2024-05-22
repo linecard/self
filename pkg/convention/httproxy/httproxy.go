@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/linecard/self/internal/labelgun"
 	"github.com/linecard/self/pkg/convention/config"
@@ -63,9 +64,15 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 	}
 
 	if !labelgun.HasLabel(c.Config.Label.Resources, r.Config.Labels) {
+		if c.Config.Httproxy.ApiId == "" {
+			log.Printf("no api gateway defined, skipping httproxy umount")
+			return nil
+		}
+
 		if err := c.Unmount(ctx, d); err != nil {
 			return err
 		}
+
 		return nil
 	}
 
@@ -87,6 +94,11 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 
 	if err := json.Unmarshal([]byte(resourcesDocument), &resources); err != nil {
 		return err
+	}
+
+	if c.Config.Httproxy.ApiId == "" && resources.Http {
+		log.Printf("no api gateway defined, skipping httproxy mount")
+		return nil
 	}
 
 	if resources.Http {
