@@ -1,5 +1,5 @@
 builds:
-- main: ./cmd/self/self.go
+- main: ./cmd/self/main.go
   binary: self
   env:
   - CGO_ENABLED=0
