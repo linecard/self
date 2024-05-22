@@ -67,9 +67,9 @@ jobs:
             ko build \
               --platform=linux/arm64,linux/amd64 \
               --tag-only \
-              --tags testing \
+              --tags ${GITHUB_REF#refs/*/} \
               --bare \
-              ./src/    
+              ./cmd/self
 
   release-e2e-image:
     needs: test
