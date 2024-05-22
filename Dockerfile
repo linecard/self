@@ -2,10 +2,10 @@ FROM ghcr.io/linecard/entry:0.7.1 as entry
 
 FROM golang:alpine3.19 as build
 WORKDIR /src
-COPY ./src .
+COPY . .
 
 RUN go mod download
-RUN GOOS=linux CGO_ENABLED=0 go build -o main
+RUN GOOS=linux CGO_ENABLED=0 go build cmd/self/main.go
 
 FROM scratch
 COPY --from=entry /ko-app/entry /opt/entry

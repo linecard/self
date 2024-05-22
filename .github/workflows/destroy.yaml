@@ -20,4 +20,4 @@ jobs:
         with:
             go-version: "1.21.7"
             cache-dependency-path: "${{ matrix.function }}/src/go.sum"
-      - run: go run src/self.go untag --tag ${{ github.event.ref }}
+      - run: go run cmd/self/main.go untag --tag ${{ github.event.ref }}

@@ -1,18 +1,16 @@
-project_name: self
-
 builds:
-  - main: ./src/self.go
-    binary: self
-    goos:
-      - linux
-      - darwin
-      - windows
-    goarch:
-      - amd64
-      - arm64
-    env:
-      - CGO_ENABLED=0
-    ldflags: 
-      - '-extldflags "-static"'
-    flags:
-      - -trimpath
+- main: ./cmd/self/self.go
+  binary: self
+  env:
+  - CGO_ENABLED=0
+  ldflags:
+  - '-extldflags "-static"'
+  flags:
+  - -trimpath
+  goos:
+  - linux
+  - darwin
+  - windows
+  goarch:
+  - amd64
+  - arm64
