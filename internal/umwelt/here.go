@@ -95,9 +95,7 @@ func FromCwd(ctx context.Context, cwd string, git gitlib.DotGit, awsConfig aws.C
 	}
 
 	// Gateway
-	if here.ApiGateway.Id, err = GetApiGatewayId("AWS_API_GATEWAY_ID", gwc); err != nil {
-		return here, err
-	}
+	here.ApiGateway.Id, _ = GetApiGatewayId("AWS_API_GATEWAY_ID", gwc)
 
 	return here, nil
 }
@@ -139,9 +137,7 @@ func FromEvent(ctx context.Context, event events.ECRImageActionEvent, awsConfig 
 	}
 
 	// Gateway
-	if here.ApiGateway.Id, err = GetApiGatewayId("AWS_API_GATEWAY_ID", gwc); err != nil {
-		return here, err
-	}
+	here.ApiGateway.Id, _ = GetApiGatewayId("AWS_API_GATEWAY_ID", gwc)
 
 	return here, nil
 }
