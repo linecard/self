@@ -5,7 +5,7 @@ WORKDIR /src
 COPY . .
 
 RUN go mod download
-RUN GOOS=linux CGO_ENABLED=0 go build cmd/self/main.go -o main
+RUN GOOS=linux CGO_ENABLED=0 go build cmd/self/main.go
 
 FROM scratch
 COPY --from=entry /ko-app/entry /opt/entry
