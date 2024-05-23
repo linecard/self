@@ -108,7 +108,12 @@ func (s Service) PutIntegration(ctx context.Context, apiId, lambdaArn, routeKey 
 	})
 }
 
-func (s Service) PutRoute(ctx context.Context, apiId, integrationId, routeKey string) (*apigatewayv2.GetRouteOutput, error) {
+func (s Service) PutRoute(ctx context.Context, apiId, integrationId, routeKey string, awsAuth bool) (*apigatewayv2.GetRouteOutput, error) {
+	authType := types.AuthorizationTypeNone
+	if awsAuth {
+		authType = types.AuthorizationTypeAwsIam
+	}
+
 	routes, err := s.Client.Gw.GetRoutes(ctx, &apigatewayv2.GetRoutesInput{
 		ApiId: aws.String(apiId),
 	})
@@ -124,7 +129,7 @@ func (s Service) PutRoute(ctx context.Context, apiId, integrationId, routeKey st
 				RouteId:           route.RouteId,
 				RouteKey:          aws.String(routeKey),
 				Target:            aws.String(fmt.Sprintf("integrations/%s", integrationId)),
-				AuthorizationType: types.AuthorizationTypeAwsIam,
+				AuthorizationType: authType,
 			})
 
 			if err != nil {
@@ -142,7 +147,7 @@ func (s Service) PutRoute(ctx context.Context, apiId, integrationId, routeKey st
 		ApiId:             aws.String(apiId),
 		RouteKey:          aws.String(routeKey),
 		Target:            aws.String(fmt.Sprintf("integrations/%s", integrationId)),
-		AuthorizationType: types.AuthorizationTypeAwsIam,
+		AuthorizationType: authType,
 	})
 
 	if err != nil {
