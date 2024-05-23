@@ -19,10 +19,6 @@ import (
 //go:embed static/*
 var staticFiles embed.FS
 
-var (
-	version = "latest"
-)
-
 type Function struct {
 	Name string
 	Path string

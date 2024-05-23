@@ -103,6 +103,5 @@ func defaultExpectation(mockGit gitlib.DotGit) Config {
 		Httproxy: Httproxy{
 			ApiId: "mockApiId",
 		},
-		Version: "latest",
 	}
 }

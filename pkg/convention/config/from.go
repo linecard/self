@@ -46,7 +46,5 @@ func FromHere(here umwelt.Here) (c Config) {
 
 	c.Httproxy.ApiId = here.ApiGateway.Id
 
-	c.Version = version
-
 	return
 }
