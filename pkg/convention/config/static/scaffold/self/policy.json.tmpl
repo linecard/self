@@ -1,0 +1,86 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowAccessLoose",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "events:ListEventBuses",
+                "events:ListRules",
+                "events:ListTargetsByRule",
+                "ecr:DescribeRegistry",
+                "apigateway:GET"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "AllowIAMAccess",
+            "Effect": "Allow",
+            "Action": [
+                "iam:*"
+            ],
+            "Resource": [
+                "arn:aws:iam::{{"{{"}} .AccountId {{"}}"}}:policy/{{ .Resource.Prefix }}-*",
+                "arn:aws:iam::{{"{{"}} .AccountId {{"}}"}}:role/{{ .Resource.Prefix }}-*"
+            ]
+        },
+        {
+            "Sid": "AllowLambdaAccess",
+            "Effect": "Allow",
+            "Action": [
+                "lambda:*"
+            ],
+            "Resource": [
+                "arn:aws:lambda:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .AccountId {{"}}"}}:function:{{ .Resource.Prefix }}-*"
+            ]
+        },
+        {
+            "Sid": "AllowECRRegistryAccess",
+            "Effect": "Allow",
+            "Action": [
+                "ecr:*"
+            ],
+            "Resource": [
+                "arn:aws:ecr:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .RegistryAccountId {{"}}"}}:repository/{{ .Repository.Prefix }}/*"
+            ]
+        },
+        {
+            "Sid": "AllowEventBridgeAccess",
+            "Effect": "Allow",
+            "Action": [
+                "events:DeleteRule",
+                "events:RemoveTargets",
+                "events:PutRule",
+                "events:PutTargets"
+            ],
+            "Resource": [
+                "arn:aws:events:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .AccountId {{"}}"}}:rule/{{ .Resource.Prefix }}-*"
+            ]
+        },
+        {
+            "Sid": "AllowAPIGatewayAccess",
+            "Effect": "Allow",
+            "Action": [
+                "apigateway:GET",
+                "apigateway:POST",
+                "apigateway:DELETE",
+                "apigateway:PATCH"
+            ],
+            "Resource": [
+                "arn:aws:apigateway:*::/apis",
+                "arn:aws:apigateway:*::/apis/*/routes",
+                "arn:aws:apigateway:*::/apis/*/routes/*",
+                "arn:aws:apigateway:*::/apis/*/integrations",
+                "arn:aws:apigateway:*::/apis/*/integrations/*"
+            ],
+            "Condition": {
+                "StringEquals": {
+                    "aws:ResourceTag/SelfManaged": "true"
+                }
+            }
+        }
+    ]
+}

@@ -116,6 +116,11 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 }
 
 func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespace string) error {
+	if c.Config.Httproxy.ApiId == "" {
+		log.Printf("no api gateway defined, skipping httproxy mount")
+		return nil
+	}
+
 	gw, err := c.Service.Gateway.GetApi(ctx, c.Config.Httproxy.ApiId)
 	if err != nil {
 		return err
@@ -149,6 +154,11 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespac
 func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error {
 	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Unmount")
 	defer span.End()
+
+	if c.Config.Httproxy.ApiId == "" {
+		log.Printf("no api gateway defined, skipping httproxy umount")
+		return nil
+	}
 
 	gw, err := c.Service.Gateway.GetApi(ctx, c.Config.Httproxy.ApiId)
 	if err != nil {
@@ -194,4 +204,12 @@ func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error 
 
 func (c Convention) ListRoutes(ctx context.Context, d deployment.Deployment) ([]types.Route, error) {
 	return c.Service.Gateway.GetRoutesByFunctionArn(ctx, c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn)
+}
+
+// for view layer only
+func (c Convention) UnsafeListRoutes(ctx context.Context, d deployment.Deployment) ([]types.Route, error) {
+	if c.Config.Httproxy.ApiId == "" {
+		return []types.Route{}, nil
+	}
+	return c.ListRoutes(ctx, d)
 }

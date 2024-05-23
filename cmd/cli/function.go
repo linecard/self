@@ -234,15 +234,15 @@ func (f FunctionScope) ListBuses(ctx context.Context) {
 		log.Fatal(err.Error())
 	}
 
-	tablec.AppendHeader(table.Row{"Bus", "Rule", "Reason", "Destroy", "Update"})
+	tablec.AppendHeader(table.Row{"Bus", "Rule", "Destroy", "Update", "Reason"})
 
 	for _, subscription := range subscriptions {
 		tablec.AppendRow(table.Row{
 			subscription.Meta.Bus,
 			subscription.Meta.Rule,
-			subscription.Meta.Reason,
 			subscription.Meta.Destroy,
 			subscription.Meta.Update,
+			subscription.Meta.Reason,
 		})
 	}
 

@@ -4,9 +4,11 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -16,6 +18,10 @@ import (
 
 //go:embed static/*
 var staticFiles embed.FS
+
+var (
+	version = "main"
+)
 
 type Function struct {
 	Name string
@@ -84,6 +90,7 @@ type Config struct {
 	Httproxy     Httproxy
 	TemplateData TemplateData
 	Label        Label
+	Version      string
 }
 
 // derived information
@@ -150,4 +157,63 @@ func (c Config) Json(ctx context.Context) (string, error) {
 	}
 
 	return string(cJson), nil
+}
+
+func (c Config) Scaffold(templateName, functionName string) error {
+	scaffoldPath := "static/scaffold"
+	templatePath := filepath.Join(scaffoldPath, templateName)
+
+	if _, err := staticFiles.ReadDir(templatePath); os.IsNotExist(err) {
+		templates, err := staticFiles.ReadDir(scaffoldPath)
+		if err != nil {
+			return err
+		}
+
+		var templateNames []string
+		for _, template := range templates {
+			templateNames = append(templateNames, template.Name())
+		}
+
+		return fmt.Errorf("scaffold %s does not exist. valid options: %s", templateName, strings.Join(templateNames, ", "))
+	}
+
+	return fs.WalkDir(staticFiles, templatePath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Calculate the relative path with respect to templatePath
+		relPath, err := filepath.Rel(templatePath, path)
+		if err != nil {
+			return err
+		}
+		targetFilePath := filepath.Join(functionName, relPath)
+
+		if d.IsDir() {
+			return os.MkdirAll(targetFilePath, os.ModePerm)
+		}
+
+		content, err := fs.ReadFile(staticFiles, path)
+		if err != nil {
+			return err
+		}
+
+		tmpl, err := template.New(filepath.Base(path)).Parse(string(content))
+		if err != nil {
+			return err
+		}
+
+		outputFile, err := os.Create(targetFilePath)
+		if err != nil {
+			return err
+		}
+		defer outputFile.Close()
+
+		err = tmpl.Execute(outputFile, c)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
 }

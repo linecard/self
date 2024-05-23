@@ -37,9 +37,8 @@ func PolicyArnFromName(accountId, name string) string {
 	return "arn:aws:iam::" + accountId + ":policy/" + name
 }
 
-// This function is for view layer. If using elsewhere, consider carefully.
-// There are reasons go doesn't behave this way by default.
-func SafeSlice(s string, start, end int) string {
+// For view layer only
+func UnsafeSlice(s string, start, end int) string {
 	if s == "" {
 		return ""
 	}

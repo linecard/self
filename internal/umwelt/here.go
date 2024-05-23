@@ -17,6 +17,11 @@ import (
 	"github.com/linecard/self/internal/util"
 )
 
+// https://en.wikipedia.org/wiki/Umwelt
+//
+// Umwelt (German for "environment" or "surroundings") is used to configure the SDK based on execution context.
+// Then name was chosen out of a desire to unburden the term "Config" and more accurately describe the activity of the struct.
+
 type STSClient interface {
 	GetCallerIdentity(ctx context.Context, params *sts.GetCallerIdentityInput, optFns ...func(*sts.Options)) (*sts.GetCallerIdentityOutput, error)
 	AssumeRole(ctx context.Context, params *sts.AssumeRoleInput, optFns ...func(*sts.Options)) (*sts.AssumeRoleOutput, error)

@@ -1,0 +1,12 @@
+{
+  "source": ["aws.ecr"],
+  "detail-type": ["ECR Image Action"],
+  "detail": {
+    "result": ["SUCCESS"],
+    "repository-name": [
+      {
+        "prefix": "{{ .Repository.Prefix }}"
+      }
+    ]
+  }
+}

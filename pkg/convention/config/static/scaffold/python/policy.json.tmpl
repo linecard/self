@@ -1,0 +1,18 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowAccessLoose",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "events:ListEventBuses",
+                "events:ListRules",
+                "events:ListTargetsByRule"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
