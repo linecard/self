@@ -5,7 +5,7 @@ builds:
   - CGO_ENABLED=0
   ldflags:
   - -extldflags "-static"
-  - -X main.version={{.Env.VERSION}}
+  - -X config.version={{ .Env.VERSION }}
   flags:
   - -trimpath
   goos:

@@ -20,7 +20,7 @@ import (
 var staticFiles embed.FS
 
 var (
-	version = "main"
+	version = "latest"
 )
 
 type Function struct {

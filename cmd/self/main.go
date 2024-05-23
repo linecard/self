@@ -7,11 +7,6 @@ import (
 	"github.com/linecard/self/internal/util"
 )
 
-var (
-	version = "dev"
-	commit  = "dev"
-)
-
 func main() {
 	ctx, tp, shutdown := tracing.InitOtel()
 	defer shutdown()
