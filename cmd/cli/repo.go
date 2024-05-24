@@ -65,9 +65,6 @@ func (r RepoScope) Handle(ctx context.Context) {
 	case r.Init != nil:
 		r.InitFunction(ctx)
 
-	case r.Version != nil:
-		fmt.Printf(api.Account.Config.Version)
-
 	default:
 		arg.MustParse(&r).WriteUsage(os.Stdout)
 
@@ -297,6 +294,10 @@ func (r RepoScope) GcEcr(ctx context.Context) {
 
 	if input == "y" {
 		for functionName, digests := range digestsForDeletion {
+			if len(digests) == 0 {
+				continue
+			}
+
 			if err := api.Release.GcApply(ctx, functionName, digests); err != nil {
 				log.Fatal(err.Error())
 			}

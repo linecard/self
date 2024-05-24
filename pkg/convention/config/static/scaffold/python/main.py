@@ -1,18 +1,15 @@
-import http
-import socketserver
-import logging
+from fastapi import FastAPI, Request
 
-PORT = 8000
+app = FastAPI(title="example")
 
-class GetHandler(
-        http.server.SimpleHTTPRequestHandler
-        ):
+@app.middleware("http")
+async def proxy_aware_swagger(request: Request, call_next):
+        forwarded_for_prefix = request.headers.get("x-forwarded-prefix", "")
+        if forwarded_for_prefix != "":
+            request.scope["root_path"] = forwarded_for_prefix
+        response = await call_next(request)
+        return response
 
-    def do_GET(self):
-        logging.error(self.headers)
-        http.server.SimpleHTTPRequestHandler.do_GET(self)
-
-
-Handler = GetHandler
-httpd = socketserver.TCPServer(("", 8080), Handler)
-httpd.serve_forever()
+@app.get("/")
+def read_root(request: Request):
+      return request.headers
