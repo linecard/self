@@ -67,6 +67,8 @@ self publish -l
 self deploy
 ```
 
+Goto the API gateway console and deduce the pathing and URL to which this was deployed. Of course this will be clarified to painful extent, but for now it is an exercise for the reader.
+
 ## Dive a little deeper
 ```
 # run this in the root of the repo, then run it when in a function directory
@@ -82,4 +84,4 @@ self config | jq .
 
 This `README` is not yet covering the _actual_ usage of self for daily driving. This is the manual run through, with operational interfaces that aim to be improved. There are many features, like the accurate local emulation of lambdas, that have been left out. 
 
-Spoiler: `self init self deployer` implements `self` within a lambda, deployed by `self` which continuously deploys/destroys lambdas in tight conjunction with git branches.
+Spoiler: `self init self deployer` implements `self` within a lambda, deployed by `self` which continuously deploys/destroys lambdas in tight conjunction with git branches. `self` as a CLI tool is intended purely for operations, and a subset is to be exposed for local development flow (local lambda deployment).
