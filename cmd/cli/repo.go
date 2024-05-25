@@ -35,7 +35,6 @@ type RepoScope struct {
 	GcDeployments *GcDeploymentOpts `arg:"subcommand:gc-deployments" help:"Garbage collect deployments"`
 	GcReleases    *NullCommand      `arg:"subcommand:gc-releases" help:"Garbage collect releases"`
 	Config        *NullCommand      `arg:"subcommand:config" help:"Print configuration"`
-	Version       *NullCommand      `arg:"subcommand:version" help:"Print version"`
 	Login         bool              `arg:"-l,--ecr-login" help:"Login to ECR"`
 }
 
