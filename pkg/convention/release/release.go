@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
+	"github.com/aws/smithy-go"
 	"github.com/docker/docker/api/types"
 	"github.com/golang-module/carbon/v2"
 )
@@ -89,11 +91,17 @@ func (c Convention) Find(ctx context.Context, tag string) (Release, error) {
 
 func (c Convention) List(ctx context.Context, function string) ([]ReleaseSummary, error) {
 	var releases []ReleaseSummary
+	var apiErr smithy.APIError
 	repository := c.Config.Repository.Prefix + "/" + function
 
 	list, err := c.Service.Registry.List(ctx, c.Config.Registry.Url, repository)
-	if err != nil {
-		return []ReleaseSummary{}, err
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "RepositoryNotFoundException":
+			return []ReleaseSummary{}, nil
+		default:
+			return []ReleaseSummary{}, err
+		}
 	}
 
 	for _, image := range list.ImageDetails {

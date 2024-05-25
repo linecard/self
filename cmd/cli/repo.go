@@ -23,7 +23,13 @@ type GcDeploymentOpts struct {
 	NameSpace string `arg:"-n,--namespace,env:DEFAULT_DEPLOYMENT_NAMESPACE"`
 }
 
+type ScaffoldOpts struct {
+	Template string `arg:"positional" help:"Template to scaffold"`
+	Name     string `arg:"positional" help:"Name of the function"`
+}
+
 type RepoScope struct {
+	Init          *ScaffoldOpts     `arg:"subcommand:init" help:"Initialize a new function"`
 	Deployments   *NullCommand      `arg:"subcommand:deployments" help:"List deployments"`
 	Releases      *NullCommand      `arg:"subcommand:releases" help:"List releases"`
 	GcDeployments *GcDeploymentOpts `arg:"subcommand:gc-deployments" help:"Garbage collect deployments"`
@@ -55,9 +61,18 @@ func (r RepoScope) Handle(ctx context.Context) {
 	case r.GcReleases != nil:
 		r.GcEcr(ctx)
 
+	case r.Init != nil:
+		r.InitFunction(ctx)
+
 	default:
 		arg.MustParse(&r).WriteUsage(os.Stdout)
 
+	}
+}
+
+func (r RepoScope) InitFunction(ctx context.Context) {
+	if err := api.Account.Config.Scaffold(r.Init.Template, r.Init.Name); err != nil {
+		log.Fatal(err.Error())
 	}
 }
 
@@ -90,7 +105,7 @@ func (r RepoScope) ListDeployments(ctx context.Context) {
 				}
 			}
 
-			routes, err := api.Httproxy.ListRoutes(ctx, dep)
+			routes, err := api.Httproxy.UnsafeListRoutes(ctx, dep)
 			if err != nil {
 				log.Fatal(err.Error())
 			}
@@ -103,8 +118,8 @@ func (r RepoScope) ListDeployments(ctx context.Context) {
 			tablec.AppendRow(table.Row{
 				dep.Tags["NameSpace"],
 				dep.Tags["Function"],
-				util.SafeSlice(dep.Tags["Sha"], 0, 8),
-				util.SafeSlice(*dep.Configuration.CodeSha256, 0, 8),
+				util.UnsafeSlice(dep.Tags["Sha"], 0, 8),
+				util.UnsafeSlice(*dep.Configuration.CodeSha256, 0, 8),
 				enabled,
 				strings.Join(routeKeys, ", "),
 				carbon.Parse(*dep.Configuration.LastModified).DiffForHumans(),
@@ -139,12 +154,11 @@ func (r RepoScope) ListReleases(ctx context.Context) {
 					tablec.AppendRow(table.Row{
 						release.Branch,
 						f.Name,
-						util.SafeSlice(release.GitSha, 0, 8),
-						util.SafeSlice(release.ImageDigest, 7, 15),
+						util.UnsafeSlice(release.GitSha, 0, 8),
+						util.UnsafeSlice(release.ImageDigest, 7, 15),
 						carbon.Parse(release.Released).DiffForHumans(),
 					})
 				}
-
 			}
 		}(function)
 	}
@@ -194,8 +208,8 @@ func (r RepoScope) GcLambda(ctx context.Context) {
 		tablec.AppendRow(table.Row{
 			dep.Tags["NameSpace"],
 			dep.Tags["Function"],
-			util.SafeSlice(dep.Tags["Sha"], 0, 8),
-			util.SafeSlice(*dep.Configuration.CodeSha256, 0, 8),
+			util.UnsafeSlice(dep.Tags["Sha"], 0, 8),
+			util.UnsafeSlice(*dep.Configuration.CodeSha256, 0, 8),
 		})
 	}
 
@@ -260,8 +274,8 @@ func (r RepoScope) GcEcr(ctx context.Context) {
 			tablec.AppendRow(table.Row{
 				release.Branch,
 				function.Name,
-				util.SafeSlice(release.GitSha, 0, 8),
-				util.SafeSlice(release.ImageDigest, 7, 15),
+				util.UnsafeSlice(release.GitSha, 0, 8),
+				util.UnsafeSlice(release.ImageDigest, 7, 15),
 				carbon.Parse(release.Released).DiffForHumans(),
 			})
 		}
@@ -279,6 +293,10 @@ func (r RepoScope) GcEcr(ctx context.Context) {
 
 	if input == "y" {
 		for functionName, digests := range digestsForDeletion {
+			if len(digests) == 0 {
+				continue
+			}
+
 			if err := api.Release.GcApply(ctx, functionName, digests); err != nil {
 				log.Fatal(err.Error())
 			}

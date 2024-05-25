@@ -20,7 +20,7 @@ import (
 type GatewayService interface {
 	GetApi(ctx context.Context, apiId string) (*apigatewayv2.GetApiOutput, error)
 	PutIntegration(ctx context.Context, apiId, lambdaArn, routeKey string) (*apigatewayv2.GetIntegrationOutput, error)
-	PutRoute(ctx context.Context, apiId, integrationId, routeKey string) (*apigatewayv2.GetRouteOutput, error)
+	PutRoute(ctx context.Context, apiId, integrationId, routeKey string, awsAuth bool) (*apigatewayv2.GetRouteOutput, error)
 	PutLambdaPermission(ctx context.Context, apiId, lambdaArn, routeKey string) error
 	DeleteIntegration(ctx context.Context, apiId string, route types.Route) error
 	DeleteRoute(ctx context.Context, apiId string, route types.Route) error
@@ -77,9 +77,11 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 	}
 
 	resources := struct {
-		Http bool `json:"http"`
+		Http   bool `json:"http"`
+		Public bool `json:"public"`
 	}{
-		Http: false,
+		Http:   false,
+		Public: false,
 	}
 
 	resourcesTemplate, err := labelgun.DecodeLabel(c.Config.Label.Resources, r.Config.Labels)
@@ -102,7 +104,7 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 	}
 
 	if resources.Http {
-		if err := c.Mount(ctx, d, namespace); err != nil {
+		if err := c.Mount(ctx, d, namespace, !resources.Public); err != nil {
 			return err
 		}
 		return nil
@@ -115,7 +117,12 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 	return nil
 }
 
-func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespace string) error {
+func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespace string, awsAuth bool) error {
+	if c.Config.Httproxy.ApiId == "" {
+		log.Printf("no api gateway defined, skipping httproxy mount")
+		return nil
+	}
+
 	gw, err := c.Service.Gateway.GetApi(ctx, c.Config.Httproxy.ApiId)
 	if err != nil {
 		return err
@@ -133,7 +140,7 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespac
 		return err
 	}
 
-	_, err = c.Service.Gateway.PutRoute(ctx, c.Config.Httproxy.ApiId, *integration.IntegrationId, routeKey)
+	_, err = c.Service.Gateway.PutRoute(ctx, c.Config.Httproxy.ApiId, *integration.IntegrationId, routeKey, awsAuth)
 	if err != nil {
 		return err
 	}
@@ -149,6 +156,11 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespac
 func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error {
 	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Unmount")
 	defer span.End()
+
+	if c.Config.Httproxy.ApiId == "" {
+		log.Printf("no api gateway defined, skipping httproxy umount")
+		return nil
+	}
 
 	gw, err := c.Service.Gateway.GetApi(ctx, c.Config.Httproxy.ApiId)
 	if err != nil {
@@ -194,4 +206,12 @@ func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error 
 
 func (c Convention) ListRoutes(ctx context.Context, d deployment.Deployment) ([]types.Route, error) {
 	return c.Service.Gateway.GetRoutesByFunctionArn(ctx, c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn)
+}
+
+// for view layer only
+func (c Convention) UnsafeListRoutes(ctx context.Context, d deployment.Deployment) ([]types.Route, error) {
+	if c.Config.Httproxy.ApiId == "" {
+		return []types.Route{}, nil
+	}
+	return c.ListRoutes(ctx, d)
 }
