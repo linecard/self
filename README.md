@@ -67,6 +67,12 @@ self publish -l
 self deploy
 ```
 
+### What did I do?
+```
+self releases
+self deployments
+```
+
 Goto the API gateway console and deduce the pathing and URL to which this was deployed. Of course this will be clarified to painful extent, but for now it is an exercise for the reader.
 
 ## Dive a little deeper
