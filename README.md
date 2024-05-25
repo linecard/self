@@ -66,6 +66,7 @@ cd explore
 self publish -l
 self deploy
 ```
+note: `self init go <name>`, `self init python <name>` and `self init self <name>` are currently supported. This will be made clear by the cli, but for now, this is the record.
 
 ### What did I do?
 ```
