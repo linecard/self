@@ -39,7 +39,7 @@ func GetRegistryRegion(envar string, fallback aws.Config) string {
 
 func GetApiGatewayId(envar string, fallback ApiGatewayClient) (string, error) {
 	var apis *apigatewayv2.GetApisOutput
-	var selfManagedIds []string
+	var SelfDiscoveredIds []string
 	var err error
 
 	if givenId, exists := os.LookupEnv(envar); exists {
@@ -52,18 +52,18 @@ func GetApiGatewayId(envar string, fallback ApiGatewayClient) (string, error) {
 	}
 
 	for _, api := range apis.Items {
-		if _, exists := api.Tags["SelfManaged"]; exists {
-			selfManagedIds = append(selfManagedIds, *api.ApiId)
+		if _, exists := api.Tags["SelfDiscovery"]; exists {
+			SelfDiscoveredIds = append(SelfDiscoveredIds, *api.ApiId)
 		}
 	}
 
-	if len(selfManagedIds) == 0 {
-		return "", fmt.Errorf("no API gateways found with tag %s", "SelfManaged")
+	if len(SelfDiscoveredIds) == 0 {
+		return "", fmt.Errorf("no API gateways found with tag %s", "SelfDiscovery")
 	}
 
-	if len(selfManagedIds) > 1 {
-		return "", fmt.Errorf("multiple self-managed APIs found, must declare intent via %s", envar)
+	if len(SelfDiscoveredIds) > 1 {
+		return "", fmt.Errorf("multiple self-discovered APIs found, must declare intent via %s", envar)
 	}
 
-	return selfManagedIds[0], nil
+	return SelfDiscoveredIds[0], nil
 }

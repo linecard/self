@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/linecard/self/internal/labelgun"
 	"github.com/linecard/self/pkg/convention/config"
@@ -13,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2/types"
 	dockerTypes "github.com/docker/docker/api/types"
+	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 )
@@ -65,7 +65,7 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 
 	if !labelgun.HasLabel(c.Config.Label.Resources, r.Config.Labels) {
 		if c.Config.Httproxy.ApiId == "" {
-			log.Printf("no api gateway defined, skipping httproxy umount")
+			log.Warn().Msg("no api gateway defined, skipping httproxy umount")
 			return nil
 		}
 
@@ -99,7 +99,7 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 	}
 
 	if c.Config.Httproxy.ApiId == "" && resources.Http {
-		log.Printf("no api gateway defined, skipping httproxy mount")
+		log.Warn().Msg("no api gateway defined, skipping httproxy mount")
 		return nil
 	}
 
@@ -119,7 +119,7 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 
 func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespace string, awsAuth bool) error {
 	if c.Config.Httproxy.ApiId == "" {
-		log.Printf("no api gateway defined, skipping httproxy mount")
+		log.Warn().Msg("no api gateway defined, skipping httproxy mount")
 		return nil
 	}
 
@@ -131,8 +131,8 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespac
 	routeKey := c.Config.RouteKey(namespace)
 
 	// This should also be enforced in IAM policy with a conditional.
-	if _, exist := gw.Tags["SelfManaged"]; !exist {
-		return fmt.Errorf("api gateway %s does not have SelfManaged tag", *gw.ApiId)
+	if _, exist := gw.Tags["SelfDiscovery"]; !exist {
+		return fmt.Errorf("api gateway %s does not have SelfDiscovery tag", *gw.ApiId)
 	}
 
 	integration, err := c.Service.Gateway.PutIntegration(ctx, c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn, routeKey)
@@ -158,7 +158,7 @@ func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error 
 	defer span.End()
 
 	if c.Config.Httproxy.ApiId == "" {
-		log.Printf("no api gateway defined, skipping httproxy umount")
+		log.Warn().Msg("no api gateway defined, skipping httproxy umount")
 		return nil
 	}
 
@@ -169,8 +169,8 @@ func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error 
 	}
 
 	// This should also be enforced in IAM policy with a conditional.
-	if _, exist := gw.Tags["SelfManaged"]; !exist {
-		err := fmt.Errorf("api gateway %s does not have SelfManaged tag", *gw.ApiId)
+	if _, exist := gw.Tags["SelfDiscovery"]; !exist {
+		err := fmt.Errorf("api gateway %s does not have SelfDiscovery tag", *gw.ApiId)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}

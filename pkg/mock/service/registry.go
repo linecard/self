@@ -52,6 +52,11 @@ func (m *MockRegistryService) Untag(ctx context.Context, registryId, repository,
 	return args.Error(0)
 }
 
+func (m *MockRegistryService) PutRepository(ctx context.Context, repositoryName string) error {
+	args := m.Called(ctx, repositoryName)
+	return args.Error(0)
+}
+
 func MockImageInspect(config config.Config, created *time.Time) dockertypes.ImageInspect {
 	digest := "sha256:mockDigest"
 

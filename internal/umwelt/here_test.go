@@ -34,7 +34,7 @@ func defaultSetup(ctx context.Context, mockSTS *clientmock.MockSTSClient, mockEC
 		Items: []types.Api{
 			{
 				ApiId: aws.String("mockApiId"),
-				Tags:  map[string]string{"SelfManaged": "true"},
+				Tags:  map[string]string{"SelfDiscovery": "sense"},
 			},
 		},
 	}, nil)

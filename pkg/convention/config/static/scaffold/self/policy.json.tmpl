@@ -77,8 +77,10 @@
                 "arn:aws:apigateway:*::/apis/*/integrations/*"
             ],
             "Condition": {
-                "StringEquals": {
-                    "aws:ResourceTag/SelfManaged": "true"
+                "ForAllValues:StringEquals": {
+                    "aws:TagKeys": [
+                        "SelfDiscovery"
+                    ]
                 }
             }
         }

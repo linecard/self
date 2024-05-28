@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"slices"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"github.com/alexflint/go-arg"
 	"github.com/golang-module/carbon/v2"
 	"github.com/jedib0t/go-pretty/table"
+	"github.com/rs/zerolog/log"
 )
 
 type GcDeploymentOpts struct {
@@ -35,16 +35,9 @@ type RepoScope struct {
 	GcDeployments *GcDeploymentOpts `arg:"subcommand:gc-deployments" help:"Garbage collect deployments"`
 	GcReleases    *NullCommand      `arg:"subcommand:gc-releases" help:"Garbage collect releases"`
 	Config        *NullCommand      `arg:"subcommand:config" help:"Print configuration"`
-	Login         bool              `arg:"-l,--ecr-login" help:"Login to ECR"`
 }
 
 func (r RepoScope) Handle(ctx context.Context) {
-	if r.Login {
-		if err := api.Account.LoginToEcr(ctx); err != nil {
-			log.Fatal(err.Error())
-		}
-	}
-
 	switch {
 	case r.Deployments != nil:
 		r.ListDeployments(ctx)
@@ -72,7 +65,7 @@ func (r RepoScope) Handle(ctx context.Context) {
 
 func (r RepoScope) InitFunction(ctx context.Context) {
 	if err := api.Account.Config.Scaffold(r.Init.Template, r.Init.Name); err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to scaffold function")
 	}
 }
 
@@ -81,7 +74,7 @@ func (r RepoScope) ListDeployments(ctx context.Context) {
 
 	deployments, err := api.Deployment.List(ctx)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to list deployments")
 	}
 
 	tablec.AppendHeader(table.Row{"NameSpace", "Function", "Sha", "Digest", "Enabled", "Http", "Updated"})
@@ -95,7 +88,7 @@ func (r RepoScope) ListDeployments(ctx context.Context) {
 
 			subscriptions, err := api.Subscription.List(ctx, dep)
 			if err != nil {
-				log.Fatal(err.Error())
+				log.Fatal().Err(err).Msg("failed to list subscriptions")
 			}
 
 			for _, subscription := range subscriptions {
@@ -107,7 +100,7 @@ func (r RepoScope) ListDeployments(ctx context.Context) {
 
 			routes, err := api.Httproxy.UnsafeListRoutes(ctx, dep)
 			if err != nil {
-				log.Fatal(err.Error())
+				log.Fatal().Err(err).Msg("failed to list routes")
 			}
 
 			var routeKeys []string
@@ -129,7 +122,7 @@ func (r RepoScope) ListDeployments(ctx context.Context) {
 
 	wg.Wait()
 
-	tablec.SortBy([]table.SortBy{{Name: "NameSpace", Mode: table.Asc}, {Name: "Function", Mode: table.Asc}})
+	tablec.SortBy([]table.SortBy{{Name: "NameSpace"}, {Name: "Function"}})
 	tablec.Render()
 }
 
@@ -146,7 +139,7 @@ func (r RepoScope) ListReleases(ctx context.Context) {
 
 			releases, err := api.Release.List(ctx, f.Name)
 			if err != nil {
-				log.Fatal(err.Error())
+				log.Fatal().Err(err).Msg("failed to list releases")
 			}
 
 			for _, release = range releases {
@@ -164,14 +157,14 @@ func (r RepoScope) ListReleases(ctx context.Context) {
 	}
 
 	wg.Wait()
-	tablec.SortBy([]table.SortBy{{Name: "Branch", Mode: table.Asc}})
+	tablec.SortBy([]table.SortBy{{Name: "Branch"}, {Name: "Function"}})
 	tablec.Render()
 }
 
 func (r RepoScope) PrintConfig(ctx context.Context) {
 	cJson, err := api.Account.Config.Json(ctx)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to print configuration")
 	}
 
 	fmt.Println(cJson)
@@ -183,7 +176,7 @@ func (r RepoScope) GcLambda(ctx context.Context) {
 
 	deployments, err := api.Deployment.ListNameSpace(ctx, r.GcDeployments.NameSpace)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to list deployments")
 	}
 
 	for _, function := range cfg.Functions {
@@ -227,28 +220,28 @@ func (r RepoScope) GcLambda(ctx context.Context) {
 		for _, d := range delete {
 			deployment, err := api.Deployment.Find(ctx, d.Tags["NameSpace"], d.Tags["Function"])
 			if err != nil {
-				log.Fatal(err.Error())
+				log.Fatal().Err(err).Msg("failed to find deployment")
 			}
 
 			err = api.Subscription.DisableAll(ctx, deployment)
 			if err != nil {
-				log.Fatal(err.Error())
+				log.Fatal().Err(err).Msg("failed to disable subscriptions")
 			}
 
 			err = api.Httproxy.Unmount(ctx, deployment)
 			if err != nil {
-				log.Fatal(err.Error())
+				log.Fatal().Err(err).Msg("failed to unmount gateway httproxy")
 			}
 
 			err = api.Deployment.Destroy(ctx, deployment)
 			if err != nil {
-				log.Fatal(err.Error())
+				log.Fatal().Err(err).Msg("failed to destroy deployment")
 			}
 		}
 		return
 	}
 
-	log.Fatal("garbage collection aborted")
+	log.Fatal().Msg("Garbage collection aborted.")
 }
 
 func (r RepoScope) GcEcr(ctx context.Context) {
@@ -264,7 +257,7 @@ func (r RepoScope) GcEcr(ctx context.Context) {
 	for _, function := range cfg.Functions {
 		save, digestsForDeletion[function.Name], err = api.Release.GcPlan(ctx, function.Name)
 		if err != nil {
-			log.Fatal(err.Error())
+			log.Fatal().Err(err).Msg("failed to plan garbage collection")
 		}
 
 		deleteCount += len(digestsForDeletion[function.Name])
@@ -281,8 +274,8 @@ func (r RepoScope) GcEcr(ctx context.Context) {
 		}
 	}
 
-	fmt.Printf("deleting %d/%d releases, resulting in...\n", deleteCount, totalCount)
-	tablec.SortBy([]table.SortBy{{Name: "Branch", Mode: table.Asc}})
+	fmt.Printf("deleting %d/%d releases, leaving...\n", deleteCount, totalCount)
+	tablec.SortBy([]table.SortBy{{Name: "Function"}})
 	tablec.Render()
 
 	var input string
@@ -298,11 +291,11 @@ func (r RepoScope) GcEcr(ctx context.Context) {
 			}
 
 			if err := api.Release.GcApply(ctx, functionName, digests); err != nil {
-				log.Fatal(err.Error())
+				log.Fatal().Err(err).Msg("failed to apply garbage collection")
 			}
 		}
 		return
 	}
 
-	log.Fatal("Garbage collection aborted.")
+	log.Fatal().Msg("Garbage collection aborted.")
 }

@@ -5,10 +5,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 //go:embed fixtures/*
@@ -47,14 +48,14 @@ func Base64(src string) string {
 	// Open the source file from the embedded filesystem
 	sourceFile, err := fixtures.Open("fixtures/" + src)
 	if err != nil {
-		log.Fatalf("failed to open source file: %v", err)
+		log.Fatal().Err(err).Msgf("failed to open source file: %v", err)
 	}
 	defer sourceFile.Close()
 
 	// Read the file content
 	content, err := io.ReadAll(sourceFile)
 	if err != nil {
-		log.Fatalf("failed to read source file: %v", err)
+		log.Fatal().Err(err).Msgf("failed to read source file: %v", err)
 	}
 
 	chomped := JsonChomp(string(content))
@@ -74,13 +75,13 @@ func JsonChomp(content string) string {
 func Read(src string) string {
 	sourceFile, err := fixtures.Open("fixtures/" + src)
 	if err != nil {
-		log.Fatalf("failed to open source file: %v", err)
+		log.Fatal().Err(err).Msg("failed to open source file")
 	}
 	defer sourceFile.Close()
 
 	var builder strings.Builder
 	if _, err := io.Copy(&builder, sourceFile); err != nil {
-		log.Fatalf("failed to read fixture: %v", err)
+		log.Fatal().Err(err).Msg("failed to read source file")
 	}
 
 	return builder.String()

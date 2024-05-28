@@ -4,14 +4,14 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"io"
-	"log"
 	"net/url"
 	"os"
 	"path/filepath"
 
+	"github.com/linecard/self/internal/gitlib"
 	mockfixture "github.com/linecard/self/pkg/mock/fixture"
 
-	"github.com/linecard/self/internal/gitlib"
+	"github.com/rs/zerolog/log"
 )
 
 func MockRepository(orgName, repoName, branchName string, functionNames ...string) (gitMock gitlib.DotGit, cleanupHook func()) {
@@ -22,26 +22,26 @@ func MockRepository(orgName, repoName, branchName string, functionNames ...strin
 
 		// Create Directories
 		if err := os.MkdirAll(srcPath, os.ModePerm); err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("failed to create source directory")
 		}
 		if err := os.MkdirAll(busPath, os.ModePerm); err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("failed to create bus directory")
 		}
 
 		// Copy Fixtures
 		policyDst := filepath.Join(basePath, "policy.json.tmpl")
 		if err := mockfixture.Copy("policy.json.tmpl", policyDst); err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("failed to copy policy.json.tmpl")
 		}
 
 		busDst := filepath.Join(busPath, "bus.json.tmpl")
 		if err := mockfixture.Copy("bus.json.tmpl", busDst); err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("failed to copy bus.json.tmpl")
 		}
 
 		dockerfilePath := filepath.Join(basePath, "Dockerfile")
 		if _, err := os.Create(dockerfilePath); err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("failed to create Dockerfile")
 		}
 	}
 
@@ -57,12 +57,12 @@ func MockRepository(orgName, repoName, branchName string, functionNames ...strin
 func mockGit(org, path, branch string) gitlib.DotGit {
 	origin, err := url.Parse("https://github.com/" + org + "/" + path + ".git")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("failed to parse origin URL")
 	}
 
 	sha, err := shaPath(path)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("failed to determine SHA")
 	}
 
 	return gitlib.DotGit{

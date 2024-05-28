@@ -3,7 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/linecard/self/internal/labelgun"
 	"github.com/linecard/self/internal/util"
@@ -37,7 +37,7 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 	BeforeEach(ctx, event)
 
 	if util.ShaLike(event.Detail.ImageTag) {
-		log.Printf("skipping deployment for sha-like tag %s", event.Detail.ImageTag)
+		slog.Warn("skipping deployment", "tag", event.Detail.ImageTag)
 		return nil
 	}
 
@@ -46,7 +46,7 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 
 	switch event.Detail.ActionType {
 	case "PUSH":
-		log.Printf("deploying %s:%s", cfg.Function.Name, cfg.Git.Branch)
+		slog.Info("deploying", "function", cfg.Function.Name, "branch", cfg.Git.Branch)
 		span.SetAttributes(
 			attribute.String("self.deploy.function", cfg.Function.Name),
 			attribute.String("self.deploy.branch", cfg.Git.Branch),
@@ -82,7 +82,7 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 		}
 
 	case "DELETE":
-		log.Printf("destroying %s:%s", cfg.Function.Name, cfg.Git.Branch)
+		slog.Info("destroying", "function", cfg.Function.Name, "branch", cfg.Git.Branch)
 		span.SetAttributes(
 			attribute.String("self.destroy.function", cfg.Function.Name),
 			attribute.String("self.destroy.branch", cfg.Git.Branch),
