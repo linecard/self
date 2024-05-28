@@ -5,9 +5,12 @@ import (
 	"github.com/linecard/self/cmd/handler"
 	"github.com/linecard/self/internal/tracing"
 	"github.com/linecard/self/internal/util"
+	"github.com/rs/zerolog"
 )
 
 func main() {
+	zerolog.SetGlobalLevel(zerolog.WarnLevel)
+
 	ctx, tp, shutdown := tracing.InitOtel()
 	defer shutdown()
 

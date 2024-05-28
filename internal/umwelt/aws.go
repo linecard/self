@@ -8,6 +8,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
+
+	"github.com/rs/zerolog/log"
 )
 
 func GetRegistryId(ctx context.Context, envar string, fallback ECRClient) (string, error) {
@@ -58,12 +60,14 @@ func GetApiGatewayId(envar string, fallback ApiGatewayClient) (string, error) {
 	}
 
 	if len(SelfDiscoveredIds) == 0 {
-		return "", fmt.Errorf("no API gateways found with tag %s", "SelfDiscovery")
+		log.Info().Msg("no API gateways found with SelfDiscovery tag")
+		return "", nil
 	}
 
 	if len(SelfDiscoveredIds) > 1 {
-		return "", fmt.Errorf("multiple self-discovered APIs found, must declare intent via %s", envar)
+		return "", fmt.Errorf("multiple API gateways found with SelfDiscovery tag, use %s to specify", envar)
 	}
 
+	log.Info().Str("api", SelfDiscoveredIds[0]).Msg("self-discovered API gateway")
 	return SelfDiscoveredIds[0], nil
 }
