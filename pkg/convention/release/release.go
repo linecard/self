@@ -24,6 +24,7 @@ type RegistryService interface {
 	List(ctx context.Context, registryId, repository string) (ecr.DescribeImagesOutput, error)
 	Delete(ctx context.Context, registryId, repository string, imageDigests []string) error
 	Untag(ctx context.Context, registryId, repository, tag string) error
+	PutRepository(ctx context.Context, repositoryName string) error
 }
 
 type BuildService interface {
@@ -242,4 +243,9 @@ func (c Convention) Build(ctx context.Context, functionPath, branch, sha string)
 func (c Convention) Untag(ctx context.Context, tag string) error {
 	repository := c.Config.Repository.Prefix + "/" + c.Config.Function.Name
 	return c.Service.Registry.Untag(ctx, c.Config.Registry.Id, repository, tag)
+}
+
+func (c Convention) EnsureRepository(ctx context.Context) error {
+	repositoryName := c.Config.Repository.Prefix + "/" + c.Config.Function.Name
+	return c.Service.Registry.PutRepository(ctx, repositoryName)
 }

@@ -30,6 +30,12 @@ type ReleaseOpts struct {
 	Branch string `arg:"-b,--branch,env:DEFAULT_RELEASE_BRANCH"`
 	// Default: the current commit sha.
 	Sha string `arg:"-s,--sha,env:DEFAULT_RELEASE_SHA"`
+	// Default: false
+	EnsureRepository bool `arg:"-r,--ensure-repository,env:ENSURE_REPOSITORY"`
+	// Default: false
+	Login bool `arg:"-l,--ecr-login" help:"Login to ECR"`
+	// Default: false
+	SSHAgent bool `arg:"-a,--ssh-agent" help:"mount ssh-agent into build"`
 }
 
 func Invoke(ctx context.Context) {

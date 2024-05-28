@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/alexflint/go-arg"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/linecard/self/internal/labelgun"
+
+	"github.com/rs/zerolog/log"
 )
 
 type UntagOpts struct {
@@ -34,12 +35,6 @@ type FunctionScope struct {
 }
 
 func (f FunctionScope) Handle(ctx context.Context) {
-	if f.Login {
-		if err := api.Account.LoginToEcr(ctx); err != nil {
-			log.Fatal(err.Error())
-		}
-	}
-
 	switch {
 	case f.Deployments != nil:
 		f.ListDeployments(ctx)
@@ -92,89 +87,89 @@ func (f FunctionScope) Handle(ctx context.Context) {
 func (f FunctionScope) DeployLocal(ctx context.Context) {
 	image, err := api.Release.Build(ctx, cfg.Function.Path, cfg.Git.Branch, cfg.Git.Sha)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to build image")
 	}
 
 	content, err := labelgun.DecodeLabel(cfg.Label.Policy, image.Config.Labels)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to decode policy label")
 	}
 
 	policy, err := cfg.Template(content)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to render policy template")
 	}
 
 	session, err := cfg.AssumeRoleWithPolicy(ctx, stsc, policy)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to assume role with policy")
 	}
 
 	err = api.Runtime.Emulate(ctx, image, session)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to emulate function")
 	}
 }
 
 func (f FunctionScope) DeployRelease(ctx context.Context) {
 	release, err := api.Release.Find(ctx, f.Deploy.Tag)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to find release")
 	}
 
 	deployment, err := api.Deployment.Deploy(ctx, release, f.Deploy.NameSpace, cfg.Function.Name)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to deploy release")
 	}
 
 	err = api.Subscription.Converge(ctx, deployment)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to converge subscriptions")
 	}
 
 	err = api.Httproxy.Converge(ctx, deployment, f.Deploy.NameSpace)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to converge gateway httproxy")
 	}
 }
 
 func (f FunctionScope) DestroyDeployment(ctx context.Context) {
 	deployment, err := api.Deployment.Find(ctx, f.Destroy.NameSpace, cfg.Function.Name)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to find deployment")
 	}
 
 	err = api.Subscription.DisableAll(ctx, deployment)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to disable subscriptions")
 	}
 
 	err = api.Httproxy.Unmount(ctx, deployment)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to unmount gateway httproxy")
 	}
 
 	err = api.Deployment.Destroy(ctx, deployment)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to destroy deployment")
 	}
 }
 
 func (f FunctionScope) EnableDeployment(ctx context.Context) {
 	deployment, err := api.Deployment.Find(ctx, f.Enable.NameSpace, cfg.Function.Name)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to find deployment")
 	}
 
 	subscriptions, err := api.Subscription.List(ctx, deployment)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to list subscriptions")
 	}
 
 	for _, subscription := range subscriptions {
 		err = api.Subscription.Enable(ctx, deployment, subscription)
 		if err != nil {
-			log.Fatal(err.Error())
+			log.Fatal().Err(err).Msg("failed to enable subscription")
 		}
 	}
 }
@@ -182,56 +177,68 @@ func (f FunctionScope) EnableDeployment(ctx context.Context) {
 func (f FunctionScope) DisableDeployment(ctx context.Context) {
 	deployment, err := api.Deployment.Find(ctx, f.Disable.NameSpace, cfg.Function.Name)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to find deployment")
 	}
 
 	subscriptions, err := api.Subscription.List(ctx, deployment)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to list subscriptions")
 	}
 
 	for _, subscription := range subscriptions {
 		err = api.Subscription.Disable(ctx, deployment, subscription)
 		if err != nil {
-			log.Fatal(err.Error())
+			log.Fatal().Err(err).Msg("failed to disable subscription")
 		}
 	}
 }
 
 func (f FunctionScope) PublishRelease(ctx context.Context) {
 	if cfg.Git.Dirty {
-		log.Fatal("git is dirty, commit changes before publishing")
+		log.Fatal().Msg("refusing to publish dirty branch state")
+	}
+
+	if f.Publish.Login {
+		if err := api.Account.LoginToEcr(ctx); err != nil {
+			log.Fatal().Err(err).Msg("failed to login to ecr")
+		}
+	}
+
+	if f.Publish.EnsureRepository {
+		if err := api.Release.EnsureRepository(ctx); err != nil {
+			log.Fatal().Err(err).Msg("failed to ensure repository")
+		}
 	}
 
 	path := cfg.Function.Path
 
 	image, err := api.Release.Build(ctx, path, f.Publish.Branch, f.Publish.Sha)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to build image")
 	}
 
 	err = api.Release.Publish(ctx, image)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to publish release")
 	}
 }
 
 func (f FunctionScope) UntagRelease(ctx context.Context) {
 	err := api.Release.Untag(ctx, f.Untag.Tag)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to untag release")
 	}
 }
 
 func (f FunctionScope) ListBuses(ctx context.Context) {
 	deployment, err := api.Deployment.Find(ctx, cfg.Git.Branch, cfg.Function.Name)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to find deployment")
 	}
 
 	subscriptions, err := api.Subscription.List(ctx, deployment)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to list subscriptions")
 	}
 
 	tablec.AppendHeader(table.Row{"Bus", "Rule", "Destroy", "Update", "Reason"})
@@ -253,12 +260,12 @@ func (f FunctionScope) ListBuses(ctx context.Context) {
 func (f FunctionScope) InspectRelease(ctx context.Context) {
 	release, err := api.Release.Find(ctx, f.Inspect.Tag)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to find release")
 	}
 
 	releaseJson, err := json.Marshal(release)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal().Err(err).Msg("failed to marshal release struct to json")
 	}
 
 	fmt.Println(string(releaseJson))

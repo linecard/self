@@ -2,9 +2,9 @@ package tracing
 
 import (
 	"context"
-	"log"
 
 	"github.com/linecard/self/internal/util"
+	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -18,13 +18,13 @@ func InitOtel() (ctx context.Context, tp *sdktrace.TracerProvider, shutdown func
 	shutdown = func() {}
 
 	if util.OtelConfigPresent() {
-		log.Println("initializing OpenTelemetry with OTLP exporter")
+		log.Info().Msg("initializing OpenTelemetry with OTLP exporter")
 
 		client := otlptracegrpc.NewClient()
 
 		exp, err := otlptrace.New(ctx, client)
 		if err != nil {
-			log.Fatalf("failed to initialize grpc exporter: %v", err)
+			log.Fatal().Err(err).Msg("failed to create OTLP exporter")
 		}
 
 		tp = sdktrace.NewTracerProvider(
