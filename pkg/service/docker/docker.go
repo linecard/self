@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/docker/docker/api/types"
+	"github.com/rs/zerolog/log"
 )
 
 type Service struct {
@@ -30,7 +31,8 @@ type DeployInput struct {
 func FromPath(ctx context.Context) (Service, error) {
 	binary, err := exec.LookPath("docker")
 	if err != nil {
-		return Service{}, err
+		log.Warn().Err(err).Msg("docker binary not found, some features may not work correctly.")
+		return Service{}, nil
 	}
 
 	return Service{Binary: binary}, nil
