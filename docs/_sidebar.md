@@ -1,9 +1,7 @@
 * [Home](README.md)
 * [Requirements](requirements.md)
-* [Quick Start](quick_start.md)
-* [Concepts](concepts/index.md)
-    * [Release](concepts/release.md)
-    * [Deployment](concepts/deployment.md)
-    * [Invoke](concepts/invoke.md)
-    * [Bus](concepts/bus.md)
-    * [HTTProxy](concepts/httproxy.md)
+
+* Flows
+    * [Local](ci_cd/local.md)
+    * [Continuous Integration](ci_cd/ci.md)
+    * [Continuous Deployment](ci_cd/cd.md)
