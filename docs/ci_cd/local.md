@@ -1,15 +1,15 @@
-# Quick Start
+# Local
 
-Self is primarily designed to be a CI/CD tool, automatically deploying and destroying functions in tight correlation with the git branches from which they originate. However, as an operator, the CLI provides a way to both manage and better understand the workings of Self. So let's start here.
+Self can be used without any CI/CD integration. This scenario reprisents the most basic usage of Self, but also the usage which keeps our developer flow graph in the most complex state.
 
 ## Flow
 
 ```mermaid
 graph LR
     develop([develop])
-    commit([commit])
-    publish([publish])
-    deploy([deploy])
+    commit(["git commit"])
+    publish(["self publish"])
+    deploy(["self deploy"])
 
     develop --> commit --> publish --> deploy --> develop
 ```
