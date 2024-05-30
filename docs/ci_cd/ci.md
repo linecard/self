@@ -13,11 +13,6 @@ graph LR
     develop --> push --> deploy --> develop
 ```
 
-
-## Credentials
-
-As with running Self locally, you need credentials in your CI environment. We will not bother documenting the typical static credentials approach as we should all move beyond it whenever possible.
-
 ### AWS/GitHub OIDC Trust
 
 > **Note**
@@ -98,7 +93,7 @@ jobs:
         - name: Configure AWS Credentials
           uses: aws-actions/configure-aws-credentials@v4
           with:
-            role-to-assume: arn:aws:iam::076426954448:role/github-oidc-role
+            role-to-assume: arn:aws:iam::${AWS_ACCOUNT_ID}:role/github-oidc-role
             aws-region: us-west-2
 
         - name: Test
@@ -115,6 +110,11 @@ jobs:
 ```
 
 ### On Branch Delete
+This GitHub Actions workflow...
+1. Runs on all branch delete events.
+1. Installs Self from latest tag.
+1. Assumes the OIDC role for Self to use.
+1. Removes the branch name tag from the release in ECR.
 
 ```yaml
 # ./github/workflows/untag.yml
@@ -137,7 +137,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::475844994616:role/gh-actions-ecr-access
+          role-to-assume: arn:aws:iam::${AWS_ACCOUNT_ID}:role/gh-actions-ecr-access
           aws-region: us-west-2
 
       - name: Install self
