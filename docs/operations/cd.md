@@ -25,7 +25,12 @@ self enable # this will enable the lambda to begin continuously deploying.
 self disable # this will disable the lambda from continuously deploying.
 ```
 
+## Otel
 
+When operating within a lambda, `Self` is able to send telemetry to an Otel collector. This is done by configuring the...
 
+- `OTEL_EXPORTER_OTLP_ENDPOINT`
+- `OTEL_EXPORTER_OTLP_HEADERS`
+- `OTEL_SERVICE_NAME`
 
-
+...environment variables. See [environment](/2_factor/environment) for setting these envars in the Lambda.

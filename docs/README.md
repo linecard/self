@@ -2,8 +2,6 @@
 
 Self provides developers the means to confidently publish and deploy their code to AWS Lambda.
 
+It is a single binary which operates locally, in CI pipelines, and in AWS Lambda.
 
-> *"In the end, we are self-perceiving, self-inventing, locked-in mirages that are little miracles of self-reference."* - Douglas Hofstadter
-
-> *"An artist must never be a prisoner. Prisoner? An artist should never be a prisoner of himself, prisoner of style, prisoner of reputation, prisoner of success, etc."* -Henri Matisse
-
+To get started, go through the [requirements](/requirements), then head over to [local operation](/operations/local).

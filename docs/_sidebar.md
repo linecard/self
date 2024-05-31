@@ -8,3 +8,7 @@
     * [Local w/ CI](operations/ci.md)
     * [Local w/ CD](operations/cd.md)
     * [CI/CD](operations/ci_cd.md)
+* [Invoke](invoke/index.md)
+    * [AWS cli](invoke/aws_cli.md)
+    * [AWS console](invoke/aws_console.md)
+    * [HTTPS](invoke/https.md)
