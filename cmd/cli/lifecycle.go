@@ -43,7 +43,7 @@ func BeforeAll(ctx context.Context) {
 
 	git, err := gitlib.FromCwd()
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to introspect git, are you in a git repository?")
+		log.Fatal().Err(err).Msg("failed to introspect git, are you in a git repository? does it have a remote origin?")
 	}
 
 	here, err := umwelt.FromCwd(ctx, cwd, git, awsConfig, ecrc, gwc, stsc)

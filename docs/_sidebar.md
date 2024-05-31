@@ -1,7 +1,10 @@
 * [Home](README.md)
 * [Requirements](requirements.md)
-
-* Flows
-    * [Local](ci_cd/local.md)
-    * [Continuous Integration](ci_cd/ci.md)
-    * [Continuous Deployment](ci_cd/cd.md)
+* [2-Factor Apps](2_factor/index.md)
+    * [Source & Dependencies](2_factor/artifact.md)
+    * [Environment Variables](2_factor/environment.md)
+* [Operation](operations/index.md)
+    * [Local](operations/local.md)
+    * [Local w/ CI](operations/ci.md)
+    * [Local w/ CD](operations/cd.md)
+    * [CI/CD](operations/ci_cd.md)

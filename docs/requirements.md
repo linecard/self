@@ -19,9 +19,11 @@ Self must be able to find AWS credentials via the [credential chain](https://doc
 
 ## Dependencies
 
-You must have..
+You must have...
 * [Docker](https://www.docker.com/).
 * A dedicated AWS API Gateway for Self to manage.
+
+> **Note:** The API Gateway is _technically_ not a requirement. But usage of Self without it falls into the category of "Advanced". If you are already a Lambda expert, you will come to find that Self fully supports purely invoke and eventbridge driven patterns without http based invocation. However, operating at this lower level does not provide benefit over a well documented REST api with an [AWS_LWA_PASS_THROUGH_PATH](https://github.com/awslabs/aws-lambda-web-adapter) for eventbridge support.
 
 ### API Gateway Setup
 
@@ -30,7 +32,7 @@ You must have..
 1. Create an HTTP API Gateway with all default settings.
 1. Add a the tag `SelfDiscovery: <chosen name>` to the gateway.
 
-The API Gateway is _technically_ not a requirement. But usage of Self without it falls into the category of "Advanced". If you are already a Lambda expert, you will come to find that Self fully supports purely invoke and eventbridge driven patterns without http based ivocation. But as you will find, operating at this lower level does not provide benefit over a well documented REST api with an [AWS_LWA_PASS_THROUGH_PATH](https://github.com/awslabs/aws-lambda-web-adapter) for eventbridge support.
+
 
 ## Additional Config
 

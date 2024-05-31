@@ -1,15 +1,16 @@
 # Continuous Deployment
 
-Self achieves continuous deployment by existing as a deployed release which listens to ECR `PUSH` and `DELETE` events. Once continuous deployment is enabled, the developer flow graph is reduced to it's minimal state, requiring zero developer interaction.
+Self achieves continuous deployment by existing as a deployed release which listens to ECR `PUSH` and `DELETE` events. This removes the need to run `self deploy` from our development flow graph, but still leaves publishing on the developer as a responsibility.
 
 ## Flow
 
 ```mermaid
 graph LR
     develop([develop])
-    push([push])
+    commit([commit])
+    publish(["self publish"])
 
-    develop --> push --> develop
+    develop --> commit --> publish --> develop
 ```
 
 ## Deploy Self with Self

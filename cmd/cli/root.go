@@ -35,7 +35,7 @@ type ReleaseOpts struct {
 	// Default: false
 	Login bool `arg:"-l,--ecr-login" help:"Login to ECR"`
 	// Default: false
-	SSHAgent bool `arg:"-a,--ssh-agent" help:"mount ssh-agent into build"`
+	SSHAgent bool `arg:"-a,--ssh-agent" help:"mount ssh-agent into build (TODO)"`
 }
 
 func Invoke(ctx context.Context) {
