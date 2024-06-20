@@ -100,6 +100,40 @@ func defaultExpectation(mockGit gitlib.DotGit) Config {
 			Bus:       "org.linecard.self.bus",
 			Resources: "org.linecard.self.resources",
 		},
+		Labels: Labels{
+			Schema: StringLabel{
+				Description: "Label schema version string",
+				Key:         "org.linecard.self.schema",
+				Content:     "1.0",
+			},
+			Sha: StringLabel{
+				Description: "Git sha string",
+				Key:         "org.linecard.self.git-sha",
+				Content:     mockGit.Sha,
+			},
+			Role: EmbeddedFileLabel{
+				Description: "Role template file",
+				Key:         "org.linecard.self.role",
+				Path:        "embedded/roles/lambda.json.tmpl",
+				Required:    true,
+			},
+			Policy: FileLabel{
+				Description: "Policy template file",
+				Key:         "org.linecard.self.policy",
+				Path:        "mockRepo/function-one/policy.json.tmpl",
+				Required:    true,
+			},
+			Resources: FileLabel{
+				Description: "Resources template file",
+				Key:         "org.linecard.self.resources",
+				Path:        "mockRepo/function-one/resources.json.tmpl",
+			},
+			Bus: FolderLabel{
+				Description: "Bus templates folder",
+				KeyPrefix:   "org.linecard.self.bus",
+				Path:        "mockRepo/function-one/bus",
+			},
+		},
 		Httproxy: Httproxy{
 			ApiId: "mockApiId",
 		},

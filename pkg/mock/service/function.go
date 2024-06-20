@@ -61,8 +61,8 @@ func (m *MockFunctionService) DetachPolicyFromRole(ctx context.Context, policyAr
 	return args.Get(0).(*iam.DetachRolePolicyOutput), args.Error(1)
 }
 
-func (m *MockFunctionService) PutFunction(ctx context.Context, name string, roleArn string, imageUri string, arch types.Architecture, ephemeralStorage, memorySize, timeout int32, tags map[string]string) (*lambda.GetFunctionOutput, error) {
-	args := m.Called(ctx, name, roleArn, imageUri, arch, ephemeralStorage, memorySize, timeout, tags)
+func (m *MockFunctionService) PutFunction(ctx context.Context, name string, roleArn string, imageUri string, arch types.Architecture, ephemeralStorage, memorySize, timeout int32, subnetIds []string, tags map[string]string) (*lambda.GetFunctionOutput, error) {
+	args := m.Called(ctx, name, roleArn, imageUri, arch, ephemeralStorage, memorySize, timeout, subnetIds, tags)
 	return args.Get(0).(*lambda.GetFunctionOutput), args.Error(1)
 }
 

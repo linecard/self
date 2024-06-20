@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
@@ -27,8 +28,9 @@ func BeforeEach(ctx context.Context, event events.ECRImageActionEvent) {
 	stsc := sts.NewFromConfig(awsConfig)
 	ecrc := ecr.NewFromConfig(awsConfig)
 	gwc := apigatewayv2.NewFromConfig(awsConfig)
+	ec2c := ec2.NewFromConfig(awsConfig)
 
-	here, err := umwelt.FromEvent(ctx, event, awsConfig, ecrc, gwc, stsc)
+	here, err := umwelt.FromEvent(ctx, event, awsConfig, ecrc, gwc, stsc, ec2c)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to introspect surrounding environment")
 	}

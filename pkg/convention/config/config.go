@@ -16,8 +16,8 @@ import (
 	"github.com/linecard/self/internal/util"
 )
 
-//go:embed static/*
-var staticFiles embed.FS
+//go:embed embedded/*
+var embedded embed.FS
 
 type Function struct {
 	Name string
@@ -59,6 +59,11 @@ type Httproxy struct {
 	ApiId string
 }
 
+type Vpc struct {
+	Id        string
+	SubnetIds []string
+}
+
 type TemplateData struct {
 	AccountId         string
 	Region            string
@@ -67,11 +72,20 @@ type TemplateData struct {
 }
 
 type Label struct {
+	Sha       string
 	Role      string
 	Policy    string
-	Sha       string
 	Bus       string
 	Resources string
+}
+
+type Labels struct {
+	Schema    StringLabel
+	Sha       StringLabel
+	Role      EmbeddedFileLabel
+	Policy    FileLabel
+	Resources FileLabel
+	Bus       FolderLabel
 }
 
 type Config struct {
@@ -84,8 +98,10 @@ type Config struct {
 	Repository   Repository
 	Resource     Resource
 	Httproxy     Httproxy
+	Vpc          Vpc
 	TemplateData TemplateData
 	Label        Label
+	Labels       Labels
 	Version      string
 }
 
@@ -137,15 +153,6 @@ func (c Config) AssumeRoleWithPolicy(ctx context.Context, stsc *sts.Client, poli
 	})
 }
 
-func (c Config) ReadStatic(path string) (string, error) {
-	content, err := fs.ReadFile(staticFiles, path)
-	if err != nil {
-		return "", err
-	}
-
-	return string(content), nil
-}
-
 func (c Config) Json(ctx context.Context) (string, error) {
 	cJson, err := json.Marshal(c)
 	if err != nil {
@@ -156,11 +163,11 @@ func (c Config) Json(ctx context.Context) (string, error) {
 }
 
 func (c Config) Scaffold(templateName, functionName string) error {
-	scaffoldPath := "static/scaffold"
+	scaffoldPath := "embedded/scaffold"
 	templatePath := filepath.Join(scaffoldPath, templateName)
 
-	if _, err := staticFiles.ReadDir(templatePath); os.IsNotExist(err) {
-		templates, err := staticFiles.ReadDir(scaffoldPath)
+	if _, err := embedded.ReadDir(templatePath); os.IsNotExist(err) {
+		templates, err := embedded.ReadDir(scaffoldPath)
 		if err != nil {
 			return err
 		}
@@ -173,7 +180,7 @@ func (c Config) Scaffold(templateName, functionName string) error {
 		return fmt.Errorf("scaffold %s does not exist. valid options: %s", templateName, strings.Join(templateNames, ", "))
 	}
 
-	return fs.WalkDir(staticFiles, templatePath, func(path string, d fs.DirEntry, err error) error {
+	return fs.WalkDir(embedded, templatePath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -189,7 +196,7 @@ func (c Config) Scaffold(templateName, functionName string) error {
 			return os.MkdirAll(targetFilePath, os.ModePerm)
 		}
 
-		content, err := fs.ReadFile(staticFiles, path)
+		content, err := fs.ReadFile(embedded, path)
 		if err != nil {
 			return err
 		}

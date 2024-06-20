@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/linecard/self/internal/labelgun"
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/release"
@@ -28,7 +27,7 @@ type FunctionService interface {
 	DeleteRole(ctx context.Context, name string) (*iam.DeleteRoleOutput, error)
 	AttachPolicyToRole(ctx context.Context, policyArn, roleName string) (*iam.AttachRolePolicyOutput, error)
 	DetachPolicyFromRole(ctx context.Context, policyArn, roleName string) (*iam.DetachRolePolicyOutput, error)
-	PutFunction(ctx context.Context, name string, roleArn string, imageUri string, arch types.Architecture, ephemeralStorage, memorySize, timeout int32, tags map[string]string) (*lambda.GetFunctionOutput, error)
+	PutFunction(ctx context.Context, name string, roleArn string, imageUri string, arch types.Architecture, ephemeralStorage, memorySize, timeout int32, subnetIds []string, tags map[string]string) (*lambda.GetFunctionOutput, error)
 	DeleteFunction(ctx context.Context, name string) (*lambda.DeleteFunctionOutput, error)
 	GetRolePolicies(ctx context.Context, name string) (*iam.ListAttachedRolePoliciesOutput, error)
 }
@@ -111,60 +110,36 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 
 	resource := c.Config.ResourceName(namespace, functionName)
 
-	roleTemplate, err := labelgun.DecodeLabel(c.Config.Label.Role, release.Config.Labels)
+	labels, err := c.Config.Labels.Decode(release.Config.Labels)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
-	roleDocument, err := c.Config.Template(roleTemplate)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return Deployment{}, err
+	for k, v := range labels {
+		templatedValue, err := c.Config.Template(v)
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+			return Deployment{}, err
+		}
+
+		labels[k] = templatedValue
 	}
 
-	policyTemplate, err := labelgun.DecodeLabel(c.Config.Label.Policy, release.Config.Labels)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return Deployment{}, err
-	}
-
-	policyDocument, err := c.Config.Template(policyTemplate)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return Deployment{}, err
-	}
-
-	sha, err := labelgun.DecodeLabel(c.Config.Label.Sha, release.Config.Labels)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return Deployment{}, err
-	}
-
+	// Opting for parsing/default of label values to be left until last moment.
+	// So long as these cases exist in single locations, it's better than hoisting it up to config in terms of clutter.
 	resources := struct {
 		EphemeralStorage int32 `json:"ephemeralStorage"`
 		MemorySize       int32 `json:"memorySize"`
 		Timeout          int32 `json:"timeout"`
 	}{
-		EphemeralStorage: 1024,
-		MemorySize:       1024,
-		Timeout:          120,
+		EphemeralStorage: 512,
+		MemorySize:       128,
+		Timeout:          3,
 	}
 
-	if labelgun.HasLabel(c.Config.Label.Resources, release.Config.Labels) {
-		resourcesTemplate, err := labelgun.DecodeLabel(c.Config.Label.Resources, release.Config.Labels)
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return Deployment{}, err
-		}
-
-		resourcesDocument, err := c.Config.Template(resourcesTemplate)
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return Deployment{}, err
-		}
-
-		if err := json.Unmarshal([]byte(resourcesDocument), &resources); err != nil {
+	if _, exists := labels[c.Config.Labels.Resources.Key]; exists {
+		if err := json.Unmarshal([]byte(labels[c.Config.Labels.Resources.Key]), &resources); err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			return Deployment{}, err
 		}
@@ -172,11 +147,13 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 
 	imageUri := release.Uri
 	imageArch, err := toArch(release.Architecture)
-
 	if err != nil {
 		return Deployment{}, err
 	}
 
+	sha := labels[c.Config.Labels.Sha.Key]
+	roleDocument := labels[c.Config.Labels.Role.Key]
+	policyDocument := labels[c.Config.Labels.Policy.Key]
 	tags := map[string]string{"NameSpace": namespace, "Function": functionName, "Sha": sha}
 
 	role, err := c.Service.Function.PutRole(ctx, resource, roleDocument, tags)
@@ -206,6 +183,7 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 		resources.EphemeralStorage,
 		resources.MemorySize,
 		resources.Timeout,
+		c.Config.Vpc.SubnetIds,
 		tags,
 	); err != nil {
 		span.SetStatus(codes.Error, err.Error())

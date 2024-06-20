@@ -3,6 +3,7 @@ package umwelt
 import (
 	"context"
 	"net/url"
+	"os"
 	"testing"
 
 	clientmock "github.com/linecard/self/pkg/mock/client"
@@ -12,6 +13,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2/types"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/linecard/self/internal/gitlib"
@@ -19,7 +22,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func defaultSetup(ctx context.Context, mockSTS *clientmock.MockSTSClient, mockECR *clientmock.MockECRClient, mockApiGateway *clientmock.MockApiGatewayClient) {
+func defaultSetup(ctx context.Context, mockSTS *clientmock.MockSTSClient, mockECR *clientmock.MockECRClient, mockApiGateway *clientmock.MockApiGatewayClient, mockEc2 *clientmock.MockEc2Client) {
 	mockSTS.On("GetCallerIdentity", ctx, mock.Anything).Return(&sts.GetCallerIdentityOutput{
 		UserId:  aws.String("user-123"),
 		Account: aws.String("123456789012"),
@@ -33,8 +36,26 @@ func defaultSetup(ctx context.Context, mockSTS *clientmock.MockSTSClient, mockEC
 	mockApiGateway.On("GetApis", ctx, mock.Anything).Return(&apigatewayv2.GetApisOutput{
 		Items: []types.Api{
 			{
-				ApiId: aws.String("mockApiId"),
+				ApiId: aws.String("ApiGatewayIdFromEnv"),
 				Tags:  map[string]string{"SelfDiscovery": "sense"},
+			},
+		},
+	}, nil)
+
+	mockEc2.On("DescribeVpcs", ctx, mock.Anything).Return(&ec2.DescribeVpcsOutput{
+		Vpcs: []ec2types.Vpc{
+			{
+				VpcId: aws.String("VpcIdFromEnv"),
+				Tags:  []ec2types.Tag{{Key: aws.String("SelfDiscovery"), Value: aws.String("sense")}},
+			},
+		},
+	}, nil)
+
+	mockEc2.On("DescribeSubnets", ctx, mock.Anything).Return(&ec2.DescribeSubnetsOutput{
+		Subnets: []ec2types.Subnet{
+			{
+				SubnetId: aws.String("DiscoveredSubnetId"),
+				Tags:     []ec2types.Tag{{Key: aws.String("SelfDiscovery"), Value: aws.String("sense")}},
 			},
 		},
 	}, nil)
@@ -49,28 +70,28 @@ func TestFromCwd(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		setup    func(*clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient)
-		teardown func(*clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient)
-		test     func(*testing.T, *clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient)
+		setup    func(*clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient, *clientmock.MockEc2Client)
+		teardown func(*clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient, *clientmock.MockEc2Client)
+		test     func(*testing.T, *clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient, *clientmock.MockEc2Client)
 	}{
 		{
 			name: "Repo Folder Scope: function nil, functions populated",
-			setup: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
-				defaultSetup(ctx, msts, mecr, mgw)
+			setup: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
+				defaultSetup(ctx, msts, mecr, mgw, mec2)
 			},
-			test: func(t *testing.T, msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
-				here, err := FromCwd(ctx, "mockRepo", mockGit, awsConfig, mecr, mgw, msts)
+			test: func(t *testing.T, msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
+				here, err := FromCwd(ctx, "mockRepo", mockGit, awsConfig, mecr, mgw, msts, mec2)
 				assert.NoError(t, err)
 				assert.EqualValues(t, defaultHereExpectation(mockGit), here)
 			},
 		},
 		{
 			name: "Function Folder Scope: function populated, functions populated",
-			setup: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
-				defaultSetup(ctx, msts, mecr, mgw)
+			setup: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
+				defaultSetup(ctx, msts, mecr, mgw, mec2)
 			},
-			test: func(t *testing.T, msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
-				here, err := FromCwd(ctx, "mockRepo/function-one", mockGit, awsConfig, mecr, mgw, msts)
+			test: func(t *testing.T, msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
+				here, err := FromCwd(ctx, "mockRepo/function-one", mockGit, awsConfig, mecr, mgw, msts, mec2)
 				assert.NoError(t, err)
 				assert.EqualValues(t, functionScopeHereExpectation(defaultHereExpectation(mockGit)), here)
 			},
@@ -82,15 +103,16 @@ func TestFromCwd(t *testing.T) {
 			msts := &clientmock.MockSTSClient{}
 			mecr := &clientmock.MockECRClient{}
 			mgw := &clientmock.MockApiGatewayClient{}
+			mec2 := &clientmock.MockEc2Client{}
 
 			if tc.setup != nil {
-				tc.setup(msts, mecr, mgw)
+				tc.setup(msts, mecr, mgw, mec2)
 			}
 
-			tc.test(t, msts, mecr, mgw)
+			tc.test(t, msts, mecr, mgw, mec2)
 
 			if tc.teardown != nil {
-				tc.teardown(msts, mecr, mgw)
+				tc.teardown(msts, mecr, mgw, mec2)
 			}
 		})
 	}
@@ -110,7 +132,11 @@ func defaultHereExpectation(mockGit gitlib.DotGit) Here {
 			Region: "us-west-2",
 		},
 		ApiGateway: ThisApiGateway{
-			Id: "mockApiId",
+			Id: "",
+		},
+		Vpc: ThisVpc{
+			Id:      "",
+			Subnets: []string{},
 		},
 		Function: nil,
 		Functions: []ThisFunction{
@@ -132,6 +158,7 @@ func functionScopeHereExpectation(defaultHere Here) Here {
 		Git:        defaultHere.Git,
 		Registry:   defaultHere.Registry,
 		ApiGateway: defaultHere.ApiGateway,
+		Vpc:        defaultHere.Vpc,
 		Function: &ThisFunction{
 			Name: "function-one",
 			Path: defaultHere.Git.Root + "/function-one",
@@ -146,16 +173,18 @@ func TestFromEvent(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		setup    func(*clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient)
-		teardown func(*clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient)
-		test     func(*testing.T, *clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient)
+		setup    func(*clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient, *clientmock.MockEc2Client)
+		teardown func(*clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient, *clientmock.MockEc2Client)
+		test     func(*testing.T, *clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient, *clientmock.MockEc2Client)
 	}{
 		{
 			name: "Event with Branch Tag",
-			setup: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
-				defaultSetup(ctx, msts, mecr, mgw)
+			setup: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
+				os.Setenv("AWS_API_GATEWAY_ID", "ApiGatewayIdFromEnv")
+				os.Setenv("AWS_VPC_ID", "VpcIdFromEnv")
+				defaultSetup(ctx, msts, mecr, mgw, mec2)
 			},
-			test: func(t *testing.T, msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
+			test: func(t *testing.T, msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
 				event := events.ECRImageActionEvent{
 					DetailType: "ECR Image Action",
 					Detail: events.ECRImageActionEventDetailType{
@@ -165,17 +194,23 @@ func TestFromEvent(t *testing.T) {
 					},
 				}
 
-				here, err := FromEvent(ctx, event, awsConfig, mecr, mgw, msts)
+				here, err := FromEvent(ctx, event, awsConfig, mecr, mgw, msts, mec2)
 				assert.NoError(t, err)
 				assert.EqualValues(t, branchEventExpectation(), here)
+			},
+			teardown: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
+				os.Unsetenv("AWS_API_GATEWAY_ID")
+				os.Unsetenv("AWS_VPC_ID")
 			},
 		},
 		{
 			name: "Event with SHA tag",
-			setup: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
-				defaultSetup(ctx, msts, mecr, mgw)
+			setup: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
+				os.Setenv("AWS_API_GATEWAY_ID", "ApiGatewayIdFromEnv")
+				os.Setenv("AWS_VPC_ID", "VpcIdFromEnv")
+				defaultSetup(ctx, msts, mecr, mgw, mec2)
 			},
-			test: func(t *testing.T, msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
+			test: func(t *testing.T, msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
 				event := events.ECRImageActionEvent{
 					DetailType: "ECR Image Action",
 					Detail: events.ECRImageActionEventDetailType{
@@ -185,9 +220,13 @@ func TestFromEvent(t *testing.T) {
 					},
 				}
 
-				here, err := FromEvent(ctx, event, awsConfig, mecr, mgw, msts)
+				here, err := FromEvent(ctx, event, awsConfig, mecr, mgw, msts, mec2)
 				assert.NoError(t, err)
 				assert.EqualValues(t, shaEventExpectation(branchEventExpectation()), here)
+			},
+			teardown: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
+				os.Unsetenv("AWS_API_GATEWAY_ID")
+				os.Unsetenv("AWS_VPC_ID")
 			},
 		},
 	}
@@ -197,15 +236,16 @@ func TestFromEvent(t *testing.T) {
 			msts := &clientmock.MockSTSClient{}
 			mecr := &clientmock.MockECRClient{}
 			mgw := &clientmock.MockApiGatewayClient{}
+			mec2 := &clientmock.MockEc2Client{}
 
 			if tc.setup != nil {
-				tc.setup(msts, mecr, mgw)
+				tc.setup(msts, mecr, mgw, mec2)
 			}
 
-			tc.test(t, msts, mecr, mgw)
+			tc.test(t, msts, mecr, mgw, mec2)
 
 			if tc.teardown != nil {
-				tc.teardown(msts, mecr, mgw)
+				tc.teardown(msts, mecr, mgw, mec2)
 			}
 		})
 	}
@@ -233,7 +273,11 @@ func branchEventExpectation() Here {
 			Region: "us-west-2",
 		},
 		ApiGateway: ThisApiGateway{
-			Id: "mockApiId",
+			Id: "ApiGatewayIdFromEnv",
+		},
+		Vpc: ThisVpc{
+			Id:      "VpcIdFromEnv",
+			Subnets: []string{"DiscoveredSubnetId"},
 		},
 		Function: &ThisFunction{
 			Name: "function_one",
@@ -253,6 +297,7 @@ func shaEventExpectation(branchEventExpectation Here) Here {
 		},
 		Registry:   branchEventExpectation.Registry,
 		ApiGateway: branchEventExpectation.ApiGateway,
+		Vpc:        branchEventExpectation.Vpc,
 		Function: &ThisFunction{
 			Name: "function_one",
 			Path: "",

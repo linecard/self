@@ -6,16 +6,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/linecard/self/internal/labelgun"
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
 
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/smithy-go"
 	"github.com/docker/docker/api/types"
 	"github.com/golang-module/carbon/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type RegistryService interface {
@@ -172,55 +171,12 @@ func (c Convention) Publish(ctx context.Context, i Image) error {
 }
 
 func (c Convention) Build(ctx context.Context, functionPath, branch, sha string) (Image, error) {
-	busRoot := functionPath + "/bus"
 	registryUrl := c.Config.Registry.Url
 	repository := c.Config.Repository.Prefix + "/" + c.Config.Function.Name
 
-	labels := make(map[string]string)
-
-	lambdaRole, err := c.Config.ReadStatic("static/roles/lambda.json.tmpl")
+	labels, err := c.Config.Labels.Encode()
 	if err != nil {
 		return Image{}, err
-	}
-
-	encodedRole, err := labelgun.EncodeString(lambdaRole, true)
-	if err != nil {
-		return Image{}, err
-	}
-	labels[c.Config.Label.Role] = encodedRole
-
-	encodedPolicy, err := labelgun.EncodeFile(functionPath + "/policy.json.tmpl")
-	if err != nil {
-		return Image{}, err
-	}
-	labels[c.Config.Label.Policy] = encodedPolicy
-
-	encodedSha, err := labelgun.EncodeString(sha, false)
-	if err != nil {
-		return Image{}, err
-	}
-	labels[c.Config.Label.Sha] = encodedSha
-
-	if util.PathExists(functionPath + "/resources.json.tmpl") {
-		encodedResourceConfig, err := labelgun.EncodeFile(functionPath + "/resources.json.tmpl")
-		if err != nil {
-			return Image{}, err
-		}
-		labels[c.Config.Label.Resources] = encodedResourceConfig
-	}
-
-	var busEncodings map[string]string
-	if !util.PathExists(busRoot) {
-		busEncodings = make(map[string]string)
-	} else {
-		busEncodings, err = labelgun.EncodePath(c.Config.Label.Bus, busRoot)
-		if err != nil {
-			return Image{}, err
-		}
-	}
-
-	for busLabel, encodedExpression := range busEncodings {
-		labels[busLabel] = encodedExpression
 	}
 
 	tags := []string{

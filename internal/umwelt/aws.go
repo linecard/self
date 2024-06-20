@@ -7,6 +7,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 
 	"github.com/rs/zerolog/log"
@@ -39,35 +41,97 @@ func GetRegistryRegion(envar string, fallback aws.Config) string {
 	return region
 }
 
-func GetApiGatewayId(envar string, fallback ApiGatewayClient) (string, error) {
-	var apis *apigatewayv2.GetApisOutput
-	var SelfDiscoveredIds []string
+func GetApiGatewayId(envar string, discovery ApiGatewayClient) (string, error) {
+	var apiId string
+	var exists bool
 	var err error
 
-	if givenId, exists := os.LookupEnv(envar); exists {
-		return givenId, nil
+	if apiId, exists = os.LookupEnv(envar); !exists {
+		return "", nil
 	}
 
-	apis, err = fallback.GetApis(context.Background(), &apigatewayv2.GetApisInput{})
+	getApisOutput, err := discovery.GetApis(context.Background(), &apigatewayv2.GetApisInput{})
 	if err != nil {
 		return "", err
 	}
 
-	for _, api := range apis.Items {
+	for _, api := range getApisOutput.Items {
 		if _, exists := api.Tags["SelfDiscovery"]; exists {
-			SelfDiscoveredIds = append(SelfDiscoveredIds, *api.ApiId)
+			if *api.ApiId == apiId {
+				return apiId, nil
+			}
 		}
 	}
 
-	if len(SelfDiscoveredIds) == 0 {
-		log.Info().Msg("no API gateways found with SelfDiscovery tag")
-		return "", nil
+	return "", fmt.Errorf("no api found with id %s and tagged with SelfDiscovery", apiId)
+}
+
+func GetVpcIds(envar string, discovery Ec2Client) (string, []string, error) {
+	var vpcId string
+	var subnetIds []string
+	var exists bool
+
+	if vpcId, exists = os.LookupEnv(envar); !exists {
+		return "", []string{}, nil
 	}
 
-	if len(SelfDiscoveredIds) > 1 {
-		return "", fmt.Errorf("multiple API gateways found with SelfDiscovery tag, use %s to specify", envar)
+	describeVpcsOutput, err := discovery.DescribeVpcs(context.Background(), &ec2.DescribeVpcsInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("vpc-id"),
+				Values: []string{vpcId},
+			},
+			{
+				Name:   aws.String("tag-key"),
+				Values: []string{"SelfDiscovery"},
+			},
+		},
+	})
+
+	if err != nil {
+		return "", []string{}, err
 	}
 
-	log.Info().Str("api", SelfDiscoveredIds[0]).Msg("self-discovered API gateway")
-	return SelfDiscoveredIds[0], nil
+	log.Info().Msgf("discovered %d vpcs", len(describeVpcsOutput.Vpcs))
+
+	if len(describeVpcsOutput.Vpcs) == 0 {
+		return "", []string{}, fmt.Errorf("no VPC found with id %s and tagged with SelfDiscovery", vpcId)
+	}
+
+	if len(describeVpcsOutput.Vpcs) > 1 {
+		return "", []string{}, fmt.Errorf("multiple VPCs found with id %s and tagged with SelfDiscovery", vpcId)
+	}
+
+	describeSubnetsOutput, err := discovery.DescribeSubnets(context.Background(), &ec2.DescribeSubnetsInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("vpc-id"),
+				Values: []string{vpcId},
+			},
+			{
+				Name:   aws.String("tag-key"),
+				Values: []string{"SelfDiscovery"},
+			},
+		},
+	})
+
+	if err != nil {
+		return "", []string{}, err
+	}
+
+	log.Info().Msgf("discovered %d subnets", len(describeSubnetsOutput.Subnets))
+
+	if len(describeSubnetsOutput.Subnets) == 0 {
+		return "", []string{}, fmt.Errorf("VPC %s contains no subnets tagged with SelfDiscovery", vpcId)
+	}
+
+	for _, subnet := range describeSubnetsOutput.Subnets {
+		for _, tag := range subnet.Tags {
+			if *tag.Key == "SelfDiscovery" {
+				subnetIds = append(subnetIds, *subnet.SubnetId)
+			}
+		}
+	}
+
+	return vpcId, subnetIds, nil
 }
