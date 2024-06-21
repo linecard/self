@@ -41,12 +41,6 @@ func FromHere(here umwelt.Here) (c Config) {
 	c.TemplateData.RegistryRegion = c.Registry.Region
 	c.TemplateData.RegistryAccountId = c.Registry.Id
 
-	c.Label.Sha = "org.linecard.self.git-sha"
-	c.Label.Role = "org.linecard.self.role"
-	c.Label.Policy = "org.linecard.self.policy"
-	c.Label.Resources = "org.linecard.self.resources"
-	c.Label.Bus = "org.linecard.self.bus"
-
 	c.Labels.Schema = StringLabel{
 		Description: "Label schema version string",
 		Key:         "org.linecard.self.schema",
@@ -69,23 +63,23 @@ func FromHere(here umwelt.Here) (c Config) {
 	c.Labels.Policy = FileLabel{
 		Description: "Policy template file",
 		Key:         "org.linecard.self.policy",
-		Path:        filepath.Join(c.Function.Path, "policy.json.tmpl"),
+		Path:        filepath.Join(here.Cwd, "policy.json.tmpl"),
 		Required:    true,
 	}
 
 	c.Labels.Resources = FileLabel{
 		Description: "Resources template file",
 		Key:         "org.linecard.self.resources",
-		Path:        filepath.Join(c.Function.Path, "resources.json.tmpl"),
+		Path:        filepath.Join(here.Cwd, "resources.json.tmpl"),
 	}
 
 	c.Labels.Bus = FolderLabel{
 		Description: "Bus templates folder",
 		KeyPrefix:   "org.linecard.self.bus",
-		Path:        filepath.Join(c.Function.Path, "bus"),
+		Path:        filepath.Join(here.Cwd, "bus"),
 	}
 
-	c.Httproxy.ApiId = here.ApiGateway.Id
+	c.ApiGateway.Id = here.ApiGateway.Id
 
 	return
 }

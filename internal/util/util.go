@@ -6,6 +6,9 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func DeSlasher(str string) string {
@@ -100,4 +103,34 @@ func RoleArnFromAssumeRoleArn(arn string) (string, error) {
 	// Construct the IAM role ARN
 	iamArn := fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, roleName)
 	return iamArn, nil
+}
+
+func SetLogLevel() {
+	if level, exists := os.LookupEnv("LOG_LEVEL"); exists {
+		level = strings.ToLower(level)
+		switch level {
+		case "panic":
+			zerolog.SetGlobalLevel(zerolog.PanicLevel)
+		case "fatal":
+			zerolog.SetGlobalLevel(zerolog.FatalLevel)
+		case "error":
+			zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+		case "warn":
+			zerolog.SetGlobalLevel(zerolog.WarnLevel)
+		case "info":
+			zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		case "debug":
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		case "trace":
+			zerolog.SetGlobalLevel(zerolog.TraceLevel)
+		default:
+			zerolog.SetGlobalLevel(zerolog.WarnLevel)
+			log.Warn().Msgf("invalid log level %s, defaulting to warn", level)
+			log.Warn().Msgf("valid log levels are: panic, fatal, error, warn, info, debug, trace")
+		}
+		return
+	}
+
+	zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	log.Warn().Msg("no log level set, defaulting to warn")
 }

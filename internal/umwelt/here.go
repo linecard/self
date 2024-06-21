@@ -79,6 +79,7 @@ type ThisFunction struct {
 }
 
 type Here struct {
+	Cwd        string
 	Caller     ThisCaller
 	Git        gitlib.DotGit
 	Registry   ThisRegistry
@@ -89,6 +90,8 @@ type Here struct {
 }
 
 func FromCwd(ctx context.Context, cwd string, git gitlib.DotGit, awsConfig aws.Config, ecrc ECRClient, stsc STSClient) (here Here, err error) {
+	here.Cwd = cwd
+
 	// Caller
 	whoAmI := &sts.GetCallerIdentityInput{}
 	caller, err := stsc.GetCallerIdentity(ctx, whoAmI)

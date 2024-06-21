@@ -54,7 +54,7 @@ func TestFromCwd(t *testing.T) {
 			test: func(t *testing.T, mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
 				here, err := FromCwd(ctx, "mockRepo", mockGit, awsConfig, mecr, msts)
 
-				ought := defaultFromCwd(mockGit)
+				ought := defaultFromCwd(mockGit, "mockRepo")
 				ought.ApiGateway.Id = aws.String("ApiGatewayIdFromEnv")
 				ought.Vpc.SecurityGroupIds = []string{"sg-123", "sg-456"}
 				ought.Vpc.SubnetIds = []string{"sn-123", "sn-456"}
@@ -76,7 +76,7 @@ func TestFromCwd(t *testing.T) {
 			test: func(t *testing.T, mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
 				here, err := FromCwd(ctx, "mockRepo/function-one", mockGit, awsConfig, mecr, msts)
 
-				ought := defaultFromCwd(mockGit)
+				ought := defaultFromCwd(mockGit, "mockRepo/function-one")
 				ought.Function = &ThisFunction{
 					Name: "function-one",
 					Path: mockGit.Root + "/function-one",
@@ -106,8 +106,9 @@ func TestFromCwd(t *testing.T) {
 	}
 }
 
-func defaultFromCwd(mockGit gitlib.DotGit) Here {
+func defaultFromCwd(mockGit gitlib.DotGit, cwd string) Here {
 	return Here{
+		Cwd: cwd,
 		Caller: ThisCaller{
 			Id:      "user-123",
 			Account: "123456789012",
@@ -252,6 +253,7 @@ func TestFromEvent(t *testing.T) {
 
 func defaultFromEvent() Here {
 	return Here{
+		Cwd: "",
 		Caller: ThisCaller{
 			Id:      "user-123",
 			Account: "123456789012",

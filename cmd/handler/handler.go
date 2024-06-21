@@ -3,12 +3,10 @@ package handler
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
-	"github.com/linecard/self/internal/labelgun"
-	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/sdk"
+	"github.com/rs/zerolog/log"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -36,8 +34,8 @@ func Listen(tp *sdktrace.TracerProvider) {
 func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 	BeforeEach(ctx, event)
 
-	if util.ShaLike(event.Detail.ImageTag) {
-		slog.Warn("skipping deployment", "tag", event.Detail.ImageTag)
+	if cfg.Git.Branch != "" {
+		log.Warn().Str("function", cfg.Function.Name).Str("sha", cfg.Git.Sha).Str("branch", cfg.Git.Branch).Msg("skipping")
 		return nil
 	}
 
@@ -46,7 +44,8 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 
 	switch event.Detail.ActionType {
 	case "PUSH":
-		slog.Info("deploying", "function", cfg.Function.Name, "branch", cfg.Git.Branch)
+		log.Info().Str("function", cfg.Function.Name).Str("branch", cfg.Git.Branch).Msgf("deploying")
+
 		span.SetAttributes(
 			attribute.String("self.deploy.function", cfg.Function.Name),
 			attribute.String("self.deploy.branch", cfg.Git.Branch),
@@ -54,18 +53,18 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 
 		release, err := api.Release.Find(ctx, cfg.Git.Branch)
 		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
 			return fmt.Errorf("failed to find release: %v", err)
 		}
 
-		sha, err := labelgun.DecodeLabel(cfg.Label.Sha, release.Config.Labels)
+		labels, err := cfg.Labels.Decode(release.Config.Labels)
 		if err != nil {
-			err := fmt.Errorf("failed to decode sha label: %v", err)
 			span.SetStatus(codes.Error, err.Error())
-			return err
+			return fmt.Errorf("failed to decode labels: %v", err)
 		}
 
 		span.SetAttributes(
-			attribute.String("self.deploy.sha", sha),
+			attribute.String("self.deploy.sha", labels[cfg.Labels.Sha.Key]),
 		)
 
 		deployment, err := api.Deployment.Deploy(ctx, release, cfg.Git.Branch, cfg.Function.Name)
@@ -82,7 +81,7 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 		}
 
 	case "DELETE":
-		slog.Info("destroying", "function", cfg.Function.Name, "branch", cfg.Git.Branch)
+		log.Info().Str("function", cfg.Function.Name).Str("branch", cfg.Git.Branch).Msg("destroying")
 		span.SetAttributes(
 			attribute.String("self.destroy.function", cfg.Function.Name),
 			attribute.String("self.destroy.branch", cfg.Git.Branch),

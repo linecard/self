@@ -55,8 +55,8 @@ type Resource struct {
 	Prefix string
 }
 
-type Httproxy struct {
-	ApiId *string
+type ApiGateway struct {
+	Id *string
 }
 
 type Vpc struct {
@@ -69,14 +69,6 @@ type TemplateData struct {
 	Region            string
 	RegistryRegion    string
 	RegistryAccountId string
-}
-
-type Label struct {
-	Sha       string
-	Role      string
-	Policy    string
-	Bus       string
-	Resources string
 }
 
 type Labels struct {
@@ -97,10 +89,9 @@ type Config struct {
 	Registry     Registry
 	Repository   Repository
 	Resource     Resource
-	Httproxy     Httproxy
+	ApiGateway   ApiGateway
 	Vpc          Vpc
 	TemplateData TemplateData
-	Label        Label
 	Labels       Labels
 	Version      string
 }

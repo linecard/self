@@ -10,6 +10,7 @@ import (
 
 func FromCwd(ctx context.Context, cwd string, gitMock gitlib.DotGit, awsConfig aws.Config) umwelt.Here {
 	return umwelt.Here{
+		Cwd: cwd,
 		Caller: umwelt.ThisCaller{
 			Id:      "user-123",
 			Arn:     "arn:aws:iam::123456789012:user/test",

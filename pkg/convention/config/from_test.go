@@ -78,8 +78,8 @@ func defaultExpectation(mockGit gitlib.DotGit) Config {
 			SubnetIds:        nil,
 			SecurityGroupIds: nil,
 		},
-		Httproxy: Httproxy{
-			ApiId: nil,
+		ApiGateway: ApiGateway{
+			Id: nil,
 		},
 		Git: Git{
 			Origin: "https://github.com/mockOrg/mockRepo.git",
@@ -99,13 +99,6 @@ func defaultExpectation(mockGit gitlib.DotGit) Config {
 			Region:            "us-west-2",
 			RegistryRegion:    "us-west-2",
 			RegistryAccountId: "123456789013",
-		},
-		Label: Label{
-			Role:      "org.linecard.self.role",
-			Policy:    "org.linecard.self.policy",
-			Sha:       "org.linecard.self.git-sha",
-			Bus:       "org.linecard.self.bus",
-			Resources: "org.linecard.self.resources",
 		},
 		Labels: Labels{
 			Schema: StringLabel{

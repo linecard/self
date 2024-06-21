@@ -75,14 +75,7 @@
                 "arn:aws:apigateway:*::/apis/*/routes/*",
                 "arn:aws:apigateway:*::/apis/*/integrations",
                 "arn:aws:apigateway:*::/apis/*/integrations/*"
-            ],
-            "Condition": {
-                "ForAllValues:StringEquals": {
-                    "aws:TagKeys": [
-                        "SelfDiscovery"
-                    ]
-                }
-            }
+            ]
         }
     ]
 }

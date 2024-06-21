@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/linecard/self/internal/labelgun"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/deployment"
 	"github.com/linecard/self/pkg/service/event"
+	"github.com/rs/zerolog/log"
 
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	dockerTypes "github.com/docker/docker/api/types"
@@ -235,37 +235,58 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error
 func (c Convention) listDefined(ctx context.Context, d deployment.Deployment) ([]Subscription, error) {
 	var subscriptions []Subscription
 
-	r, err := d.FetchRelease(ctx, c.Service.Registry, c.Config.Registry.Id)
+	release, err := d.FetchRelease(ctx, c.Service.Registry, c.Config.Registry.Id)
 	if err != nil {
 		return []Subscription{}, err
 	}
 
-	busLabels, err := labelgun.DecodeLabels(c.Config.Label.Bus, r.Config.Labels)
+	labels, err := c.Config.Labels.Decode(release.Config.Labels)
 	if err != nil {
 		return []Subscription{}, err
 	}
 
-	for label, value := range busLabels {
-		parts := strings.Replace(label, c.Config.Label.Bus, "", 1)
-		parts = strings.TrimPrefix(parts, ".")
+	for k, v := range labels {
+		templatedValue, err := c.Config.Template(v)
+		if err != nil {
+			return []Subscription{}, err
+		}
 
-		bus := strings.Split(parts, ".")[0]
-		rule := strings.Split(parts, ".")[1]
-		rule = *d.Configuration.FunctionName + "-" + rule
+		labels[k] = templatedValue
+	}
 
-		subscriptions = append(subscriptions, Subscription{
-			event.JoinedRule{
-				Bus: types.EventBus{
-					Name: &bus,
+	for label, value := range labels {
+		if strings.HasPrefix(label, c.Config.Labels.Bus.KeyPrefix) {
+			// drop the prefix
+			parts := strings.Replace(label, c.Config.Labels.Bus.KeyPrefix, "", 1)
+			// split remainder on dot
+			parts = strings.TrimPrefix(parts, ".")
+
+			if len(strings.Split(parts, ".")) > 2 {
+				log.Warn().Msgf("bus label suffix has too many parts: %v", parts)
+			}
+
+			// element 1 bus
+			bus := strings.Split(parts, ".")[0]
+			// element 2 rule
+			rule := strings.Split(parts, ".")[1]
+
+			// prepend function name
+			rule = *d.Configuration.FunctionName + "-" + rule
+
+			subscriptions = append(subscriptions, Subscription{
+				event.JoinedRule{
+					Bus: types.EventBus{
+						Name: &bus,
+					},
+					Rule: types.Rule{
+						Name: &rule,
+					},
 				},
-				Rule: types.Rule{
-					Name: &rule,
+				Meta{
+					Expression: value,
 				},
-			},
-			Meta{
-				Expression: value,
-			},
-		})
+			})
+		}
 	}
 
 	return subscriptions, nil

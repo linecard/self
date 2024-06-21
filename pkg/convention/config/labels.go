@@ -9,8 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/rs/zerolog/log"
 )
 
 type FileLabel struct {
@@ -199,6 +197,14 @@ func (f FileLabel) Decode(labels map[string]string) (map[string]string, error) {
 func (f FolderLabel) Encode() (map[string]string, error) {
 	encoded := make(map[string]string)
 
+	if _, err := os.Stat(f.Path); err != nil {
+		if f.Required {
+			return map[string]string{}, err
+		}
+
+		return map[string]string{}, nil
+	}
+
 	err := filepath.Walk(f.Path, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -221,8 +227,6 @@ func (f FolderLabel) Encode() (map[string]string, error) {
 			label := f.KeyPrefix + "." + dotpath
 
 			// encode file content.
-			log.Warn().Msgf("label: %s", label)
-			log.Warn().Msgf("path: %s", path)
 			fileLabel := FileLabel{
 				Description: "Individual embedded bus template",
 				Path:        path,
@@ -231,7 +235,6 @@ func (f FolderLabel) Encode() (map[string]string, error) {
 			}
 
 			content, err := fileLabel.Encode()
-			log.Warn().Msgf("content: %s", content)
 			if err != nil {
 				return err
 			}
@@ -239,8 +242,6 @@ func (f FolderLabel) Encode() (map[string]string, error) {
 			for k, v := range content {
 				encoded[k] = v
 			}
-
-			log.Warn().Msgf("encoded: %s", encoded[label])
 		}
 
 		return nil
@@ -258,7 +259,12 @@ func (f FolderLabel) Decode(labels map[string]string) (map[string]string, error)
 
 	for k, v := range labels {
 		if strings.HasPrefix(k, f.KeyPrefix) {
-			decoded[k] = v
+			decodedValue, err := base64.StdEncoding.DecodeString(v)
+			if err != nil {
+				return map[string]string{}, err
+			}
+
+			decoded[k] = string(decodedValue)
 		}
 	}
 
@@ -299,8 +305,6 @@ func (l Labels) Encode() (map[string]string, error) {
 	if err != nil {
 		return map[string]string{}, err
 	}
-
-	log.Warn().Msgf("bus count: %d", len(buses))
 
 	encoded := make(map[string]string)
 
