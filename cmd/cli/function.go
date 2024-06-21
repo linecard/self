@@ -114,7 +114,7 @@ func (f FunctionScope) DeployLocal(ctx context.Context) {
 
 	session, err := cfg.AssumeRoleWithPolicy(ctx, stsc, policy)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to assume role with policy, is your IAM role able to assume itself?")
+		log.Fatal().Err(err).Msg("failed to assume role with policy, is your IAM role able to assume itself?")
 	}
 
 	err = api.Runtime.Emulate(ctx, image, session)

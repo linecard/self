@@ -243,7 +243,7 @@ func (s Service) DeleteLambdaPermission(ctx context.Context, lambdaArn string, r
 	})
 
 	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "ResourceNotFoundException" {
-		log.Info().Msgf("lambda permission %s not found for route %s", statementId, *route.RouteKey)
+		log.Info().Msgf("no lambda permission not found for route %s", *route.RouteKey)
 		return nil
 	}
 

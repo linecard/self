@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/sdk"
 	"github.com/rs/zerolog/log"
@@ -34,7 +35,7 @@ func Listen(tp *sdktrace.TracerProvider) {
 func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 	BeforeEach(ctx, event)
 
-	if cfg.Git.Branch != "" {
+	if util.ShaLike(event.Detail.ImageTag) {
 		log.Warn().Str("function", cfg.Function.Name).Str("sha", cfg.Git.Sha).Str("branch", cfg.Git.Branch).Msg("skipping")
 		return nil
 	}
