@@ -74,6 +74,13 @@ func defaultExpectation(mockGit gitlib.DotGit) Config {
 			Region: "us-west-2",
 			Url:    "123456789013.dkr.ecr.us-west-2.amazonaws.com",
 		},
+		Vpc: Vpc{
+			SubnetIds:        nil,
+			SecurityGroupIds: nil,
+		},
+		Httproxy: Httproxy{
+			ApiId: nil,
+		},
 		Git: Git{
 			Origin: "https://github.com/mockOrg/mockRepo.git",
 			Branch: mockGit.Branch,
@@ -133,9 +140,6 @@ func defaultExpectation(mockGit gitlib.DotGit) Config {
 				KeyPrefix:   "org.linecard.self.bus",
 				Path:        "mockRepo/function-one/bus",
 			},
-		},
-		Httproxy: Httproxy{
-			ApiId: "mockApiId",
 		},
 	}
 }

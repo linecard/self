@@ -39,7 +39,7 @@ func (s Service) List(ctx context.Context, prefix string) ([]lambda.GetFunctionO
 	return functions, nil
 }
 
-func (s Service) PutFunction(ctx context.Context, name string, roleArn string, imageUri string, arch types.Architecture, ephemeralStorage, memorySize, timeout int32, subnetIds []string, tags map[string]string) (*lambda.GetFunctionOutput, error) {
+func (s Service) PutFunction(ctx context.Context, name string, roleArn string, imageUri string, arch types.Architecture, ephemeralStorage, memorySize, timeout int32, subnetIds, securityGroupIds []string, tags map[string]string) (*lambda.GetFunctionOutput, error) {
 	var apiErr smithy.APIError
 
 	getFunctionInput := &lambda.GetFunctionInput{
@@ -59,14 +59,11 @@ func (s Service) PutFunction(ctx context.Context, name string, roleArn string, i
 		},
 		MemorySize: aws.Int32(memorySize),
 		Timeout:    aws.Int32(timeout),
-		Tags:       tags,
-	}
-
-	// might be better allowing subnetIds to be nil from the bottom up?
-	if len(subnetIds) > 0 {
-		createFunctionInput.VpcConfig = &types.VpcConfig{
-			SubnetIds: subnetIds,
-		}
+		VpcConfig: &types.VpcConfig{
+			SubnetIds:        subnetIds,
+			SecurityGroupIds: securityGroupIds,
+		},
+		Tags: tags,
 	}
 
 	putFunctionConcurrencyInput := &lambda.PutFunctionConcurrencyInput{

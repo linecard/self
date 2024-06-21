@@ -27,7 +27,7 @@ type FunctionService interface {
 	DeleteRole(ctx context.Context, name string) (*iam.DeleteRoleOutput, error)
 	AttachPolicyToRole(ctx context.Context, policyArn, roleName string) (*iam.AttachRolePolicyOutput, error)
 	DetachPolicyFromRole(ctx context.Context, policyArn, roleName string) (*iam.DetachRolePolicyOutput, error)
-	PutFunction(ctx context.Context, name string, roleArn string, imageUri string, arch types.Architecture, ephemeralStorage, memorySize, timeout int32, subnetIds []string, tags map[string]string) (*lambda.GetFunctionOutput, error)
+	PutFunction(ctx context.Context, name string, roleArn string, imageUri string, arch types.Architecture, ephemeralStorage, memorySize, timeout int32, subnetIds, securityGroupIds []string, tags map[string]string) (*lambda.GetFunctionOutput, error)
 	DeleteFunction(ctx context.Context, name string) (*lambda.DeleteFunctionOutput, error)
 	GetRolePolicies(ctx context.Context, name string) (*iam.ListAttachedRolePoliciesOutput, error)
 }
@@ -184,6 +184,7 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 		resources.MemorySize,
 		resources.Timeout,
 		c.Config.Vpc.SubnetIds,
+		c.Config.Vpc.SecurityGroupIds,
 		tags,
 	); err != nil {
 		span.SetStatus(codes.Error, err.Error())

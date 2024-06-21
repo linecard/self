@@ -147,7 +147,13 @@ func TestDeployment(t *testing.T) {
 					"mockRepo-feature-branch-function-one",
 					"arn:aws:iam::123456789012:role/mockRepo-feature-branch-function-one",
 					"123456789013.dkr.ecr.us-west-2.amazonaws.com/mockOrg/mockRepo/function-one@sha256:mockDigest",
-					types.ArchitectureArm64, int32(1024), int32(128), int32(60), []string{}, tags).Return(&getFunctionOutput[0], nil)
+					types.ArchitectureArm64,
+					int32(1024),
+					int32(128),
+					int32(60),
+					mock.MatchedBy(func(subnetIds []string) bool { return len(subnetIds) == 0 }),
+					mock.MatchedBy(func(subnetIds []string) bool { return len(subnetIds) == 0 }),
+					tags).Return(&getFunctionOutput[0], nil)
 
 				mfs.On("Inspect", mock.Anything, "mockRepo-feature-branch-function-one").Return(&getFunctionOutput[0], nil)
 			},
@@ -188,7 +194,6 @@ func TestDeployment(t *testing.T) {
 		// 		mfs.On("DetachPolicyFromRole", mock.Anything, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one-unknown", "mockRepo-feature-branch-function-one").Return(&iam.DetachRolePolicyOutput{}, nil)
 		// 		mfs.On("DeletePolicy", mock.Anything, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one").Return(&iam.DeletePolicyOutput{}, nil)
 		// 		mfs.On("DeletePolicy", mock.Anything, "arn:aws:iam::123456789012:policy/mockRepo-feature-branch-function-one-unknown").Return(&iam.DeletePolicyOutput{}, nil)
-
 		// 		mfs.On("DeleteRole", mock.Anything, "mockRepo-feature-branch-function-one").Return(&iam.DeleteRoleOutput{}, nil)
 		// 		mfs.On("DeleteFunction", mock.Anything, "mockRepo-feature-branch-function-one").Return(&lambda.DeleteFunctionOutput{}, nil)
 		// 	},

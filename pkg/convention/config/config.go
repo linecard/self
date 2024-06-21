@@ -56,12 +56,12 @@ type Resource struct {
 }
 
 type Httproxy struct {
-	ApiId string
+	ApiId *string
 }
 
 type Vpc struct {
-	Id        string
-	SubnetIds []string
+	SecurityGroupIds []string
+	SubnetIds        []string
 }
 
 type TemplateData struct {

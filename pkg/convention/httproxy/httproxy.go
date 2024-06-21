@@ -64,7 +64,7 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 	}
 
 	if !labelgun.HasLabel(c.Config.Label.Resources, r.Config.Labels) {
-		if c.Config.Httproxy.ApiId == "" {
+		if c.Config.Httproxy.ApiId == nil {
 			log.Warn().Msg("no api gateway defined, skipping httproxy umount")
 			return nil
 		}
@@ -98,7 +98,7 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 		return err
 	}
 
-	if c.Config.Httproxy.ApiId == "" && resources.Http {
+	if c.Config.Httproxy.ApiId == nil && resources.Http {
 		log.Warn().Msg("no api gateway defined, skipping httproxy mount")
 		return nil
 	}
@@ -118,12 +118,12 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 }
 
 func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespace string, awsAuth bool) error {
-	if c.Config.Httproxy.ApiId == "" {
+	if c.Config.Httproxy.ApiId == nil {
 		log.Warn().Msg("no api gateway defined, skipping httproxy mount")
 		return nil
 	}
 
-	gw, err := c.Service.Gateway.GetApi(ctx, c.Config.Httproxy.ApiId)
+	gw, err := c.Service.Gateway.GetApi(ctx, *c.Config.Httproxy.ApiId)
 	if err != nil {
 		return err
 	}
@@ -135,17 +135,17 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespac
 		return fmt.Errorf("api gateway %s does not have SelfDiscovery tag", *gw.ApiId)
 	}
 
-	integration, err := c.Service.Gateway.PutIntegration(ctx, c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn, routeKey)
+	integration, err := c.Service.Gateway.PutIntegration(ctx, *c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn, routeKey)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.Service.Gateway.PutRoute(ctx, c.Config.Httproxy.ApiId, *integration.IntegrationId, routeKey, awsAuth)
+	_, err = c.Service.Gateway.PutRoute(ctx, *c.Config.Httproxy.ApiId, *integration.IntegrationId, routeKey, awsAuth)
 	if err != nil {
 		return err
 	}
 
-	err = c.Service.Gateway.PutLambdaPermission(ctx, c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn, routeKey)
+	err = c.Service.Gateway.PutLambdaPermission(ctx, *c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn, routeKey)
 	if err != nil {
 		return err
 	}
@@ -157,12 +157,12 @@ func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error 
 	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Unmount")
 	defer span.End()
 
-	if c.Config.Httproxy.ApiId == "" {
+	if c.Config.Httproxy.ApiId == nil {
 		log.Warn().Msg("no api gateway defined, skipping httproxy umount")
 		return nil
 	}
 
-	gw, err := c.Service.Gateway.GetApi(ctx, c.Config.Httproxy.ApiId)
+	gw, err := c.Service.Gateway.GetApi(ctx, *c.Config.Httproxy.ApiId)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return err
@@ -175,14 +175,14 @@ func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error 
 		return err
 	}
 
-	routes, err := c.Service.Gateway.GetRoutesByFunctionArn(ctx, c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn)
+	routes, err := c.Service.Gateway.GetRoutesByFunctionArn(ctx, *c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
 	for _, route := range routes {
-		err = c.Service.Gateway.DeleteRoute(ctx, c.Config.Httproxy.ApiId, route)
+		err = c.Service.Gateway.DeleteRoute(ctx, *c.Config.Httproxy.ApiId, route)
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			return err
@@ -194,7 +194,7 @@ func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error 
 			return err
 		}
 
-		err = c.Service.Gateway.DeleteIntegration(ctx, c.Config.Httproxy.ApiId, route)
+		err = c.Service.Gateway.DeleteIntegration(ctx, *c.Config.Httproxy.ApiId, route)
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			return err
@@ -205,12 +205,12 @@ func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error 
 }
 
 func (c Convention) ListRoutes(ctx context.Context, d deployment.Deployment) ([]types.Route, error) {
-	return c.Service.Gateway.GetRoutesByFunctionArn(ctx, c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn)
+	return c.Service.Gateway.GetRoutesByFunctionArn(ctx, *c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn)
 }
 
 // for view layer only
 func (c Convention) UnsafeListRoutes(ctx context.Context, d deployment.Deployment) ([]types.Route, error) {
-	if c.Config.Httproxy.ApiId == "" {
+	if c.Config.Httproxy.ApiId == nil {
 		return []types.Route{}, nil
 	}
 	return c.ListRoutes(ctx, d)

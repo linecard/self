@@ -23,6 +23,9 @@ func FromHere(here umwelt.Here) (c Config) {
 	c.Registry.Region = here.Registry.Region
 	c.Registry.Url = c.Registry.Id + ".dkr.ecr." + c.Registry.Region + ".amazonaws.com"
 
+	c.Vpc.SecurityGroupIds = here.Vpc.SecurityGroupIds
+	c.Vpc.SubnetIds = here.Vpc.SubnetIds
+
 	c.Git.Origin = here.Git.Origin.String()
 	c.Git.Branch = here.Git.Branch
 	c.Git.Sha = here.Git.Sha

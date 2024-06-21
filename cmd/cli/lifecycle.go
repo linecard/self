@@ -10,8 +10,6 @@ import (
 	"github.com/linecard/self/pkg/sdk"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/jedib0t/go-pretty/table"
@@ -40,15 +38,13 @@ func BeforeAll(ctx context.Context) {
 
 	stsc = sts.NewFromConfig(awsConfig)
 	ecrc := ecr.NewFromConfig(awsConfig)
-	gwc := apigatewayv2.NewFromConfig(awsConfig)
-	ec2c := ec2.NewFromConfig(awsConfig)
 
 	git, err := gitlib.FromCwd()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to introspect git, are you in a git repository? does it have a remote origin?")
 	}
 
-	here, err := umwelt.FromCwd(ctx, cwd, git, awsConfig, ecrc, gwc, stsc, ec2c)
+	here, err := umwelt.FromCwd(ctx, cwd, git, awsConfig, ecrc, stsc)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to introspect surrounding environment")
 	}

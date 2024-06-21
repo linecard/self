@@ -21,8 +21,12 @@ func FromCwd(ctx context.Context, cwd string, gitMock gitlib.DotGit, awsConfig a
 			Id:     "123456789013",
 			Region: "us-west-2",
 		},
+		Vpc: umwelt.ThisVpc{
+			SecurityGroupIds: nil,
+			SubnetIds:        nil,
+		},
 		ApiGateway: umwelt.ThisApiGateway{
-			Id: "mockApiId",
+			Id: nil,
 		},
 		Function:  umwelt.Selfish(cwd),
 		Functions: umwelt.SelfDiscovery(gitMock.Root),

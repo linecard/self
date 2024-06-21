@@ -11,10 +11,6 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
-	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2/types"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/linecard/self/internal/gitlib"
@@ -22,7 +18,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func defaultSetup(ctx context.Context, mockSTS *clientmock.MockSTSClient, mockECR *clientmock.MockECRClient, mockApiGateway *clientmock.MockApiGatewayClient, mockEc2 *clientmock.MockEc2Client) {
+func defaultSetup(ctx context.Context, mockECR *clientmock.MockECRClient, mockSTS *clientmock.MockSTSClient) {
 	mockSTS.On("GetCallerIdentity", ctx, mock.Anything).Return(&sts.GetCallerIdentityOutput{
 		UserId:  aws.String("user-123"),
 		Account: aws.String("123456789012"),
@@ -31,33 +27,6 @@ func defaultSetup(ctx context.Context, mockSTS *clientmock.MockSTSClient, mockEC
 
 	mockECR.On("DescribeRegistry", ctx, mock.Anything).Return(&ecr.DescribeRegistryOutput{
 		RegistryId: aws.String("123456789013"),
-	}, nil)
-
-	mockApiGateway.On("GetApis", ctx, mock.Anything).Return(&apigatewayv2.GetApisOutput{
-		Items: []types.Api{
-			{
-				ApiId: aws.String("ApiGatewayIdFromEnv"),
-				Tags:  map[string]string{"SelfDiscovery": "sense"},
-			},
-		},
-	}, nil)
-
-	mockEc2.On("DescribeVpcs", ctx, mock.Anything).Return(&ec2.DescribeVpcsOutput{
-		Vpcs: []ec2types.Vpc{
-			{
-				VpcId: aws.String("VpcIdFromEnv"),
-				Tags:  []ec2types.Tag{{Key: aws.String("SelfDiscovery"), Value: aws.String("sense")}},
-			},
-		},
-	}, nil)
-
-	mockEc2.On("DescribeSubnets", ctx, mock.Anything).Return(&ec2.DescribeSubnetsOutput{
-		Subnets: []ec2types.Subnet{
-			{
-				SubnetId: aws.String("DiscoveredSubnetId"),
-				Tags:     []ec2types.Tag{{Key: aws.String("SelfDiscovery"), Value: aws.String("sense")}},
-			},
-		},
 	}, nil)
 }
 
@@ -70,55 +39,74 @@ func TestFromCwd(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		setup    func(*clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient, *clientmock.MockEc2Client)
-		teardown func(*clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient, *clientmock.MockEc2Client)
-		test     func(*testing.T, *clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient, *clientmock.MockEc2Client)
+		setup    func(*clientmock.MockECRClient, *clientmock.MockSTSClient)
+		teardown func(*clientmock.MockECRClient, *clientmock.MockSTSClient)
+		test     func(*testing.T, *clientmock.MockECRClient, *clientmock.MockSTSClient)
 	}{
 		{
 			name: "Repo Folder Scope: function nil, functions populated",
-			setup: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
-				defaultSetup(ctx, msts, mecr, mgw, mec2)
+			setup: func(mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
+				os.Setenv("AWS_API_GATEWAY_ID", "ApiGatewayIdFromEnv")
+				os.Setenv("AWS_SECURITY_GROUP_IDS", "sg-123,sg-456")
+				os.Setenv("AWS_SUBNET_IDS", "sn-123,sn-456")
+				defaultSetup(ctx, mecr, msts)
 			},
-			test: func(t *testing.T, msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
-				here, err := FromCwd(ctx, "mockRepo", mockGit, awsConfig, mecr, mgw, msts, mec2)
+			test: func(t *testing.T, mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
+				here, err := FromCwd(ctx, "mockRepo", mockGit, awsConfig, mecr, msts)
+
+				ought := defaultFromCwd(mockGit)
+				ought.ApiGateway.Id = aws.String("ApiGatewayIdFromEnv")
+				ought.Vpc.SecurityGroupIds = []string{"sg-123", "sg-456"}
+				ought.Vpc.SubnetIds = []string{"sn-123", "sn-456"}
+
 				assert.NoError(t, err)
-				assert.EqualValues(t, defaultHereExpectation(mockGit), here)
+				assert.EqualValues(t, ought, here)
+			},
+			teardown: func(mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
+				os.Unsetenv("AWS_API_GATEWAY_ID")
+				os.Unsetenv("AWS_SECURITY_GROUP_IDS")
+				os.Unsetenv("AWS_SUBNET_IDS")
 			},
 		},
 		{
 			name: "Function Folder Scope: function populated, functions populated",
-			setup: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
-				defaultSetup(ctx, msts, mecr, mgw, mec2)
+			setup: func(mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
+				defaultSetup(ctx, mecr, msts)
 			},
-			test: func(t *testing.T, msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
-				here, err := FromCwd(ctx, "mockRepo/function-one", mockGit, awsConfig, mecr, mgw, msts, mec2)
+			test: func(t *testing.T, mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
+				here, err := FromCwd(ctx, "mockRepo/function-one", mockGit, awsConfig, mecr, msts)
+
+				ought := defaultFromCwd(mockGit)
+				ought.Function = &ThisFunction{
+					Name: "function-one",
+					Path: mockGit.Root + "/function-one",
+				}
+
 				assert.NoError(t, err)
-				assert.EqualValues(t, functionScopeHereExpectation(defaultHereExpectation(mockGit)), here)
+				assert.EqualValues(t, ought, here)
 			},
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			msts := &clientmock.MockSTSClient{}
 			mecr := &clientmock.MockECRClient{}
-			mgw := &clientmock.MockApiGatewayClient{}
-			mec2 := &clientmock.MockEc2Client{}
+			msts := &clientmock.MockSTSClient{}
 
 			if tc.setup != nil {
-				tc.setup(msts, mecr, mgw, mec2)
+				tc.setup(mecr, msts)
 			}
 
-			tc.test(t, msts, mecr, mgw, mec2)
+			tc.test(t, mecr, msts)
 
 			if tc.teardown != nil {
-				tc.teardown(msts, mecr, mgw, mec2)
+				tc.teardown(mecr, msts)
 			}
 		})
 	}
 }
 
-func defaultHereExpectation(mockGit gitlib.DotGit) Here {
+func defaultFromCwd(mockGit gitlib.DotGit) Here {
 	return Here{
 		Caller: ThisCaller{
 			Id:      "user-123",
@@ -132,11 +120,11 @@ func defaultHereExpectation(mockGit gitlib.DotGit) Here {
 			Region: "us-west-2",
 		},
 		ApiGateway: ThisApiGateway{
-			Id: "",
+			Id: nil,
 		},
 		Vpc: ThisVpc{
-			Id:      "",
-			Subnets: []string{},
+			SecurityGroupIds: nil,
+			SubnetIds:        nil,
 		},
 		Function: nil,
 		Functions: []ThisFunction{
@@ -152,39 +140,25 @@ func defaultHereExpectation(mockGit gitlib.DotGit) Here {
 	}
 }
 
-func functionScopeHereExpectation(defaultHere Here) Here {
-	return Here{
-		Caller:     defaultHere.Caller,
-		Git:        defaultHere.Git,
-		Registry:   defaultHere.Registry,
-		ApiGateway: defaultHere.ApiGateway,
-		Vpc:        defaultHere.Vpc,
-		Function: &ThisFunction{
-			Name: "function-one",
-			Path: defaultHere.Git.Root + "/function-one",
-		},
-		Functions: defaultHere.Functions,
-	}
-}
-
 func TestFromEvent(t *testing.T) {
 	ctx := context.Background()
 	awsConfig := aws.Config{Region: "us-west-2"}
 
 	cases := []struct {
 		name     string
-		setup    func(*clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient, *clientmock.MockEc2Client)
-		teardown func(*clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient, *clientmock.MockEc2Client)
-		test     func(*testing.T, *clientmock.MockSTSClient, *clientmock.MockECRClient, *clientmock.MockApiGatewayClient, *clientmock.MockEc2Client)
+		setup    func(*clientmock.MockECRClient, *clientmock.MockSTSClient)
+		teardown func(*clientmock.MockECRClient, *clientmock.MockSTSClient)
+		test     func(*testing.T, *clientmock.MockECRClient, *clientmock.MockSTSClient)
 	}{
 		{
 			name: "Event with Branch Tag",
-			setup: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
+			setup: func(mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
 				os.Setenv("AWS_API_GATEWAY_ID", "ApiGatewayIdFromEnv")
-				os.Setenv("AWS_VPC_ID", "VpcIdFromEnv")
-				defaultSetup(ctx, msts, mecr, mgw, mec2)
+				os.Setenv("AWS_SUBNET_IDS", "sn-123,sn-456")
+				os.Setenv("AWS_SECURITY_GROUP_IDS", "sg-123,sg-456")
+				defaultSetup(ctx, mecr, msts)
 			},
-			test: func(t *testing.T, msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
+			test: func(t *testing.T, mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
 				event := events.ECRImageActionEvent{
 					DetailType: "ECR Image Action",
 					Detail: events.ECRImageActionEventDetailType{
@@ -194,23 +168,28 @@ func TestFromEvent(t *testing.T) {
 					},
 				}
 
-				here, err := FromEvent(ctx, event, awsConfig, mecr, mgw, msts, mec2)
+				ought := defaultFromEvent()
+				ought.Git.Branch = "branchName"
+				ought.ApiGateway.Id = aws.String("ApiGatewayIdFromEnv")
+				ought.Vpc.SecurityGroupIds = []string{"sg-123", "sg-456"}
+				ought.Vpc.SubnetIds = []string{"sn-123", "sn-456"}
+
+				here, err := FromEvent(ctx, event, awsConfig, mecr, msts)
 				assert.NoError(t, err)
-				assert.EqualValues(t, branchEventExpectation(), here)
+				assert.EqualValues(t, ought, here)
 			},
-			teardown: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
+			teardown: func(*clientmock.MockECRClient, *clientmock.MockSTSClient) {
 				os.Unsetenv("AWS_API_GATEWAY_ID")
-				os.Unsetenv("AWS_VPC_ID")
+				os.Unsetenv("AWS_SUBNET_IDS")
+				os.Unsetenv("AWS_SECURITY_GROUP_IDS")
 			},
 		},
 		{
 			name: "Event with SHA tag",
-			setup: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
-				os.Setenv("AWS_API_GATEWAY_ID", "ApiGatewayIdFromEnv")
-				os.Setenv("AWS_VPC_ID", "VpcIdFromEnv")
-				defaultSetup(ctx, msts, mecr, mgw, mec2)
+			setup: func(mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
+				defaultSetup(ctx, mecr, msts)
 			},
-			test: func(t *testing.T, msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
+			test: func(t *testing.T, mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
 				event := events.ECRImageActionEvent{
 					DetailType: "ECR Image Action",
 					Detail: events.ECRImageActionEventDetailType{
@@ -220,39 +199,58 @@ func TestFromEvent(t *testing.T) {
 					},
 				}
 
-				here, err := FromEvent(ctx, event, awsConfig, mecr, mgw, msts, mec2)
+				ought := defaultFromEvent()
+				ought.Git.Sha = "2e17ab2c190fc5dfff79e66fc972f015da937f05"
+
+				here, err := FromEvent(ctx, event, awsConfig, mecr, msts)
 				assert.NoError(t, err)
-				assert.EqualValues(t, shaEventExpectation(branchEventExpectation()), here)
+				assert.EqualValues(t, ought, here)
 			},
-			teardown: func(msts *clientmock.MockSTSClient, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient, mec2 *clientmock.MockEc2Client) {
-				os.Unsetenv("AWS_API_GATEWAY_ID")
-				os.Unsetenv("AWS_VPC_ID")
+		},
+		{
+			name: "Event with no env config",
+			setup: func(mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
+				defaultSetup(ctx, mecr, msts)
+			},
+			test: func(t *testing.T, mecr *clientmock.MockECRClient, msts *clientmock.MockSTSClient) {
+				event := events.ECRImageActionEvent{
+					DetailType: "ECR Image Action",
+					Detail: events.ECRImageActionEventDetailType{
+						ActionType:     "DELETE",
+						RepositoryName: "organization/repo/function_one",
+						ImageTag:       "branchName",
+					},
+				}
+
+				ought := defaultFromEvent()
+				ought.Git.Branch = "branchName"
+
+				here, err := FromEvent(ctx, event, awsConfig, mecr, msts)
+				assert.NoError(t, err)
+				assert.EqualValues(t, ought, here)
 			},
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			msts := &clientmock.MockSTSClient{}
 			mecr := &clientmock.MockECRClient{}
-			mgw := &clientmock.MockApiGatewayClient{}
-			mec2 := &clientmock.MockEc2Client{}
+			msts := &clientmock.MockSTSClient{}
 
 			if tc.setup != nil {
-				tc.setup(msts, mecr, mgw, mec2)
+				tc.setup(mecr, msts)
 			}
 
-			tc.test(t, msts, mecr, mgw, mec2)
+			tc.test(t, mecr, msts)
 
 			if tc.teardown != nil {
-				tc.teardown(msts, mecr, mgw, mec2)
+				tc.teardown(mecr, msts)
 			}
 		})
 	}
-
 }
 
-func branchEventExpectation() Here {
+func defaultFromEvent() Here {
 	return Here{
 		Caller: ThisCaller{
 			Id:      "user-123",
@@ -261,47 +259,25 @@ func branchEventExpectation() Here {
 			Region:  "us-west-2",
 		},
 		Git: gitlib.DotGit{
-			Branch: "branchName",
 			Origin: &url.URL{
 				Scheme: "https",
 				Host:   "github.com",
 				Path:   "/organization/repo",
 			},
 		},
+		ApiGateway: ThisApiGateway{
+			Id: nil,
+		},
+		Vpc: ThisVpc{
+			SecurityGroupIds: nil,
+			SubnetIds:        nil,
+		},
 		Registry: ThisRegistry{
 			Id:     "123456789013",
 			Region: "us-west-2",
 		},
-		ApiGateway: ThisApiGateway{
-			Id: "ApiGatewayIdFromEnv",
-		},
-		Vpc: ThisVpc{
-			Id:      "VpcIdFromEnv",
-			Subnets: []string{"DiscoveredSubnetId"},
-		},
 		Function: &ThisFunction{
 			Name: "function_one",
-			Path: "",
 		},
-		Functions: nil,
-	}
-}
-
-func shaEventExpectation(branchEventExpectation Here) Here {
-	return Here{
-		Caller: branchEventExpectation.Caller,
-		Git: gitlib.DotGit{
-			Branch: "",
-			Sha:    "2e17ab2c190fc5dfff79e66fc972f015da937f05",
-			Origin: branchEventExpectation.Git.Origin,
-		},
-		Registry:   branchEventExpectation.Registry,
-		ApiGateway: branchEventExpectation.ApiGateway,
-		Vpc:        branchEventExpectation.Vpc,
-		Function: &ThisFunction{
-			Name: "function_one",
-			Path: "",
-		},
-		Functions: nil,
 	}
 }
