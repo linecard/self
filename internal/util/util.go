@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/aws/smithy-go/logging"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func DeSlasher(str string) string {
@@ -125,12 +125,35 @@ func SetLogLevel() {
 			zerolog.SetGlobalLevel(zerolog.TraceLevel)
 		default:
 			zerolog.SetGlobalLevel(zerolog.WarnLevel)
-			log.Warn().Msgf("invalid log level %s, defaulting to warn", level)
-			log.Warn().Msgf("valid log levels are: panic, fatal, error, warn, info, debug, trace")
 		}
 		return
 	}
 
 	zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	log.Warn().Msg("no log level set, defaulting to warn")
+}
+
+// Wraps a zerolog.Logger so its interoperable with Go's standard "log" package
+
+type AwsLogInterface interface {
+	// Logf is expected to support the standard fmt package "verbs".
+	Logf(classification logging.Classification, format string, v ...interface{})
+}
+
+type RetryLogger struct {
+	Log *zerolog.Logger
+}
+
+func (l *RetryLogger) Logf(classification logging.Classification, format string, v ...interface{}) {
+	switch classification {
+	case "WARN":
+		l.Log.Warn().Msgf(format, v...)
+	case "DEBUG":
+		if strings.Contains(format, "retrying request") {
+			l.Log.Info().Msgf(format, v...)
+		} else {
+			l.Log.Debug().Msgf(format, v...)
+		}
+	default:
+		l.Log.Error().Msgf(format, v...)
+	}
 }

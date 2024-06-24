@@ -6,9 +6,11 @@ import (
 
 	"github.com/linecard/self/internal/gitlib"
 	"github.com/linecard/self/internal/umwelt"
+	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/sdk"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
@@ -31,7 +33,13 @@ func BeforeAll(ctx context.Context) {
 		log.Fatal().Err(err).Msg("failed to determine working directory")
 	}
 
-	awsConfig, err := awsconfig.LoadDefaultConfig(ctx)
+	retryLogger := util.RetryLogger{
+		Log: &log.Logger,
+	}
+
+	awsConfig, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithLogger(&retryLogger),
+		awsconfig.WithClientLogMode(aws.LogRetries))
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load AWS configuration")
 	}
