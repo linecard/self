@@ -240,11 +240,13 @@ func (c Convention) listDefined(ctx context.Context, d deployment.Deployment) ([
 		return []Subscription{}, err
 	}
 
+	// pull labels from release and base64 decode.
 	labels, err := c.Config.Labels.Decode(release.Config.Labels)
 	if err != nil {
 		return []Subscription{}, err
 	}
 
+	// template decoded labels.
 	for k, v := range labels {
 		templatedValue, err := c.Config.Template(v)
 		if err != nil {
@@ -254,6 +256,7 @@ func (c Convention) listDefined(ctx context.Context, d deployment.Deployment) ([
 		labels[k] = templatedValue
 	}
 
+	// iterate over org.linecard.self.bus.* labels and resolve into list.
 	for label, value := range labels {
 		if strings.HasPrefix(label, c.Config.Labels.Bus.KeyPrefix) {
 			// drop the prefix
@@ -262,6 +265,7 @@ func (c Convention) listDefined(ctx context.Context, d deployment.Deployment) ([
 			parts = strings.TrimPrefix(parts, ".")
 
 			if len(strings.Split(parts, ".")) > 2 {
+				// The surrounding code is a bit fuzzy for my liking, if this warning makes noise, it's time to refactor.
 				log.Warn().Msgf("bus label suffix has too many parts: %v", parts)
 			}
 

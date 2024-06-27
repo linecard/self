@@ -24,6 +24,7 @@ func BeforeAll(ctx context.Context) {
 	var err error
 
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	log.With().Caller()
 
 	tablec = table.NewWriter()
 	tablec.SetOutputMirror(os.Stdout)

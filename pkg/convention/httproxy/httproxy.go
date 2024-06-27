@@ -67,12 +67,14 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 		return err
 	}
 
+	// pull labels from release and base64 decode.
 	labels, err := c.Config.Labels.Decode(release.Config.Labels)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
+	// template decoded labels.
 	for k, v := range labels {
 		templatedValue, err := c.Config.Template(v)
 		if err != nil {
@@ -83,15 +85,7 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 		labels[k] = templatedValue
 	}
 
-	if _, exists := labels[c.Config.Labels.Resources.Key]; !exists {
-		log.Info().Msgf("no label %s defined, unmounting any associated proxy routes targeting %s", c.Config.Labels.Resources.Key, *d.Configuration.FunctionArn)
-		if err := c.Unmount(ctx, d); err != nil {
-			return err
-		}
-
-		return nil
-	}
-
+	// Set default values for pertinent resources.json.tmpl settings.
 	resources := struct {
 		Http   bool `json:"http"`
 		Public bool `json:"public"`
@@ -109,9 +103,7 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 		return c.Unmount(ctx, d)
 	}
 
-	c.Mount(ctx, d, namespace, !resources.Public)
-
-	return nil
+	return c.Mount(ctx, d, namespace, !resources.Public)
 }
 
 func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespace string, awsAuth bool) error {
