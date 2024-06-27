@@ -254,11 +254,6 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 		return Deployment{}, err
 	}
 
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return Deployment{}, err
-	}
-
 	return c.Find(ctx, namespace, functionName)
 }
 
