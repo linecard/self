@@ -175,8 +175,7 @@ func (c Convention) Build(ctx context.Context, functionPath, branch, sha string)
 	repository := c.Config.Repository.Prefix + "/" + c.Config.Function.Name
 
 	// coerce label sha to given sha
-	c.Config.Labels.Sha.Content = sha
-	labels, err := c.Config.Labels.Encode()
+	labels, err := c.Config.Labels.Encode(&sha)
 	if err != nil {
 		return Image{}, err
 	}

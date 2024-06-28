@@ -275,10 +275,14 @@ func (f FolderLabel) Decode(labels map[string]string) (map[string]string, error)
 	return decoded, nil
 }
 
-func (l Labels) Encode() (map[string]string, error) {
+func (l Labels) Encode(shaOverride *string) (map[string]string, error) {
 	schema, err := l.Schema.Encode()
 	if err != nil {
 		return map[string]string{}, err
+	}
+
+	if shaOverride != nil {
+		l.Sha.Content = *shaOverride
 	}
 
 	sha, err := l.Sha.Encode()
