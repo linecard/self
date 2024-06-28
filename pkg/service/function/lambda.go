@@ -113,6 +113,22 @@ func (s Service) PutFunction(ctx context.Context, put *lambda.CreateFunctionInpu
 		return &lambda.GetFunctionOutput{}, err
 	}
 
+	function, err := s.Client.Lambda.GetFunction(ctx, &lambda.GetFunctionInput{
+		FunctionName: put.FunctionName,
+	})
+	if err != nil {
+		return &lambda.GetFunctionOutput{}, err
+	}
+
+	tagResourceInput := lambda.TagResourceInput{
+		Resource: aws.String(*function.Configuration.FunctionArn),
+		Tags:     put.Tags,
+	}
+	_, err = s.Client.Lambda.TagResource(ctx, &tagResourceInput)
+	if err != nil {
+		return &lambda.GetFunctionOutput{}, err
+	}
+
 	return s.Client.Lambda.GetFunction(ctx, &lambda.GetFunctionInput{
 		FunctionName: put.FunctionName,
 	})
