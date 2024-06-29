@@ -28,7 +28,7 @@ type RegistryService interface {
 
 type BuildService interface {
 	InspectByTag(ctx context.Context, registryUrl, repository, tag string) (types.ImageInspect, error)
-	Build(ctx context.Context, path string, labels map[string]string, tags []string) error
+	Build(ctx context.Context, functionPath, contextPath string, labels map[string]string, tags []string) error
 	Push(ctx context.Context, tag string) error
 }
 
@@ -170,7 +170,7 @@ func (c Convention) Publish(ctx context.Context, i Image) error {
 	return nil
 }
 
-func (c Convention) Build(ctx context.Context, functionPath, branch, sha string) (Image, error) {
+func (c Convention) Build(ctx context.Context, functionPath, contextPath, branch, sha string) (Image, error) {
 	registryUrl := c.Config.Registry.Url
 	repository := c.Config.Repository.Prefix + "/" + c.Config.Function.Name
 
@@ -185,7 +185,7 @@ func (c Convention) Build(ctx context.Context, functionPath, branch, sha string)
 		fmt.Sprintf("%s/%s:%s", registryUrl, repository, sha),
 	}
 
-	if err := c.Service.Build.Build(ctx, functionPath, labels, tags); err != nil {
+	if err := c.Service.Build.Build(ctx, functionPath, contextPath, labels, tags); err != nil {
 		return Image{}, err
 	}
 

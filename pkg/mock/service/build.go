@@ -17,8 +17,8 @@ func (m *MockBuildService) InspectByTag(ctx context.Context, registryUrl, reposi
 	return args.Get(0).(types.ImageInspect), args.Error(1)
 }
 
-func (m *MockBuildService) Build(ctx context.Context, path string, labels map[string]string, tags []string) error {
-	args := m.Called(ctx, path, labels, tags)
+func (m *MockBuildService) Build(ctx context.Context, functionPath, contextPath string, labels map[string]string, tags []string) error {
+	args := m.Called(ctx, functionPath, contextPath, labels, tags)
 	return args.Error(0)
 }
 
