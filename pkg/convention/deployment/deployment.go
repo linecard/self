@@ -6,17 +6,18 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/linecard/self/internal/labelgun"
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/release"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	dockerTypes "github.com/docker/docker/api/types"
+	"github.com/rs/zerolog/log"
 )
 
 type FunctionService interface {
@@ -28,9 +29,11 @@ type FunctionService interface {
 	DeleteRole(ctx context.Context, name string) (*iam.DeleteRoleOutput, error)
 	AttachPolicyToRole(ctx context.Context, policyArn, roleName string) (*iam.AttachRolePolicyOutput, error)
 	DetachPolicyFromRole(ctx context.Context, policyArn, roleName string) (*iam.DetachRolePolicyOutput, error)
-	PutFunction(ctx context.Context, name string, roleArn string, imageUri string, arch types.Architecture, ephemeralStorage, memorySize, timeout int32, tags map[string]string) (*lambda.GetFunctionOutput, error)
 	DeleteFunction(ctx context.Context, name string) (*lambda.DeleteFunctionOutput, error)
 	GetRolePolicies(ctx context.Context, name string) (*iam.ListAttachedRolePoliciesOutput, error)
+	PutFunction(ctx context.Context, put *lambda.CreateFunctionInput, concurreny int32) (*lambda.GetFunctionOutput, error)
+	PatchFunction(ctx context.Context, patch *lambda.UpdateFunctionConfigurationInput) (*lambda.GetFunctionConfigurationOutput, error)
+	EnsureEniGcRole(ctx context.Context) (*iam.GetRoleOutput, error)
 }
 
 type RegistryService interface {
@@ -106,85 +109,77 @@ func (c Convention) ListNameSpace(ctx context.Context, namespace string) ([]Depl
 }
 
 func (c Convention) Deploy(ctx context.Context, release release.Release, namespace, functionName string) (Deployment, error) {
+	var err error
+
 	ctx, span := otel.Tracer("").Start(ctx, "deployment.Deploy")
 	defer span.End()
 
 	resource := c.Config.ResourceName(namespace, functionName)
 
-	roleTemplate, err := labelgun.DecodeLabel(c.Config.Label.Role, release.Config.Labels)
+	// if vpc configuration is partial, return an error.
+	if (c.Config.Vpc.SubnetIds == nil) != (c.Config.Vpc.SecurityGroupIds == nil) {
+		err := fmt.Errorf("VPC configuration requires both subnet and security group IDs to be set, or neither")
+		span.SetStatus(codes.Error, err.Error())
+		return Deployment{}, err
+	}
+
+	// pull labels from release and base64 decode.
+	labels, err := c.Config.Labels.Decode(release.Config.Labels)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
-	roleDocument, err := c.Config.Template(roleTemplate)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return Deployment{}, err
+	// template decoded labels.
+	for k, v := range labels {
+		templatedValue, err := c.Config.Template(v)
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+			return Deployment{}, err
+		}
+
+		labels[k] = templatedValue
 	}
 
-	policyTemplate, err := labelgun.DecodeLabel(c.Config.Label.Policy, release.Config.Labels)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return Deployment{}, err
-	}
-
-	policyDocument, err := c.Config.Template(policyTemplate)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return Deployment{}, err
-	}
-
-	sha, err := labelgun.DecodeLabel(c.Config.Label.Sha, release.Config.Labels)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return Deployment{}, err
-	}
-
+	// set default values for pertinent resources.json.tmpl settings.
 	resources := struct {
 		EphemeralStorage int32 `json:"ephemeralStorage"`
 		MemorySize       int32 `json:"memorySize"`
 		Timeout          int32 `json:"timeout"`
 	}{
-		EphemeralStorage: 1024,
-		MemorySize:       1024,
-		Timeout:          120,
+		EphemeralStorage: 512,
+		MemorySize:       128,
+		Timeout:          3,
 	}
 
-	if labelgun.HasLabel(c.Config.Label.Resources, release.Config.Labels) {
-		resourcesTemplate, err := labelgun.DecodeLabel(c.Config.Label.Resources, release.Config.Labels)
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return Deployment{}, err
-		}
-
-		resourcesDocument, err := c.Config.Template(resourcesTemplate)
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return Deployment{}, err
-		}
-
-		if err := json.Unmarshal([]byte(resourcesDocument), &resources); err != nil {
+	if _, exists := labels[c.Config.Labels.Resources.Key]; exists {
+		if err := json.Unmarshal([]byte(labels[c.Config.Labels.Resources.Key]), &resources); err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			return Deployment{}, err
 		}
 	}
 
+	// grab image uri and architecture from release for deployment parameters.
 	imageUri := release.Uri
 	imageArch, err := toArch(release.Architecture)
-
 	if err != nil {
 		return Deployment{}, err
 	}
 
+	// grab some label data for deployment tagging.
+	sha := labels[c.Config.Labels.Sha.Key]
+	roleDocument := labels[c.Config.Labels.Role.Key]
+	policyDocument := labels[c.Config.Labels.Policy.Key]
 	tags := map[string]string{"NameSpace": namespace, "Function": functionName, "Sha": sha}
 
+	// create role
 	role, err := c.Service.Function.PutRole(ctx, resource, roleDocument, tags)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
+	// create policy
 	policyArn := util.PolicyArnFromName(c.Config.Account.Id, resource)
 	policy, err := c.Service.Function.PutPolicy(ctx, policyArn, policyDocument, tags)
 	if err != nil {
@@ -192,22 +187,69 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 		return Deployment{}, err
 	}
 
+	// mix um together
 	if _, err := c.Service.Function.AttachPolicyToRole(ctx, *policy.Policy.Arn, *role.Role.RoleName); err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
-	if _, err = c.Service.Function.PutFunction(
-		ctx,
-		resource,
-		*role.Role.Arn,
-		imageUri,
-		imageArch,
-		resources.EphemeralStorage,
-		resources.MemorySize,
-		resources.Timeout,
-		tags,
-	); err != nil {
+	// create function parameters
+	input := &lambda.CreateFunctionInput{
+		FunctionName:  aws.String(resource),
+		Role:          role.Role.Arn,
+		Tags:          tags,
+		Architectures: []types.Architecture{imageArch},
+		PackageType:   types.PackageTypeImage,
+		Timeout:       &resources.Timeout,
+		MemorySize:    &resources.MemorySize,
+		VpcConfig: &types.VpcConfig{
+			SecurityGroupIds: c.Config.Vpc.SecurityGroupIds,
+			SubnetIds:        c.Config.Vpc.SubnetIds,
+		},
+		EphemeralStorage: &types.EphemeralStorage{
+			Size: &resources.EphemeralStorage,
+		},
+		Code: &types.FunctionCode{
+			ImageUri: aws.String(imageUri),
+		},
+		Publish: true,
+	}
+
+	// create function inside of vpc land if configured to do so.
+	if input.VpcConfig.SubnetIds != nil && input.VpcConfig.SecurityGroupIds != nil {
+		log.Info().Msg("VPC configuration detected, ensuring ENI garbage collection role")
+
+		eniRole, err := c.Service.Function.EnsureEniGcRole(ctx)
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+			return Deployment{}, err
+		}
+
+		// The function must be created with a seperate (and persistent) role, as this role is used during garbage collection by ec2.
+		// If you just launch with the desired role, that role will be deleted on destroy before garbage collection can clear the eni.
+		// So all functions launched by self into vpcs use the AWSLambdaVPCAccessExecutionRole. It uses the managed policy of the same name.
+		input.Role = eniRole.Role.Arn
+		if _, err = c.Service.Function.PutFunction(ctx, input, 5); err != nil {
+			span.SetStatus(codes.Error, err.Error())
+			return Deployment{}, err
+		}
+
+		// After creating the function with this ENI garbage collection role, we can go ahead and attach the role we actually want.
+		_, err = c.Service.Function.PatchFunction(ctx, &lambda.UpdateFunctionConfigurationInput{
+			FunctionName: aws.String(resource),
+			Role:         role.Role.Arn,
+		})
+
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+			return Deployment{}, err
+		}
+
+		return c.Find(ctx, namespace, functionName)
+	}
+
+	// create function outside of vpc land.
+	if _, err = c.Service.Function.PutFunction(ctx, input, 5); err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
@@ -216,35 +258,37 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 }
 
 func (c Convention) Destroy(ctx context.Context, d Deployment) error {
-	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Destroy")
+	ctx, span := otel.Tracer("").Start(ctx, "deployment.Destroy")
 	defer span.End()
 
 	roleName := util.RoleNameFromArn(*d.Configuration.Role)
 
-	policies, err := c.Service.Function.GetRolePolicies(ctx, roleName)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-
-	for _, policy := range policies.AttachedPolicies {
-		if _, err := c.Service.Function.DetachPolicyFromRole(ctx, *policy.PolicyArn, roleName); err != nil {
+	if roleName != "AWSLambdaVPCAccessExecutionRole" {
+		policies, err := c.Service.Function.GetRolePolicies(ctx, roleName)
+		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 
-		if _, err := c.Service.Function.DeletePolicy(ctx, *policy.PolicyArn); err != nil {
+		for _, policy := range policies.AttachedPolicies {
+			if _, err := c.Service.Function.DetachPolicyFromRole(ctx, *policy.PolicyArn, roleName); err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				return err
+			}
+
+			if _, err := c.Service.Function.DeletePolicy(ctx, *policy.PolicyArn); err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				return err
+			}
+		}
+
+		if _, err = c.Service.Function.DeleteRole(ctx, roleName); err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 	}
 
-	if _, err = c.Service.Function.DeleteRole(ctx, roleName); err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-
-	if _, err = c.Service.Function.DeleteFunction(ctx, *d.Configuration.FunctionName); err != nil {
+	if _, err := c.Service.Function.DeleteFunction(ctx, *d.Configuration.FunctionName); err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}

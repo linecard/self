@@ -6,6 +6,9 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/aws/smithy-go/logging"
+	"github.com/rs/zerolog"
 )
 
 func DeSlasher(str string) string {
@@ -100,4 +103,57 @@ func RoleArnFromAssumeRoleArn(arn string) (string, error) {
 	// Construct the IAM role ARN
 	iamArn := fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, roleName)
 	return iamArn, nil
+}
+
+func SetLogLevel() {
+	if level, exists := os.LookupEnv("LOG_LEVEL"); exists {
+		level = strings.ToLower(level)
+		switch level {
+		case "panic":
+			zerolog.SetGlobalLevel(zerolog.PanicLevel)
+		case "fatal":
+			zerolog.SetGlobalLevel(zerolog.FatalLevel)
+		case "error":
+			zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+		case "warn":
+			zerolog.SetGlobalLevel(zerolog.WarnLevel)
+		case "info":
+			zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		case "debug":
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		case "trace":
+			zerolog.SetGlobalLevel(zerolog.TraceLevel)
+		default:
+			zerolog.SetGlobalLevel(zerolog.WarnLevel)
+		}
+		return
+	}
+
+	zerolog.SetGlobalLevel(zerolog.WarnLevel)
+}
+
+// Wraps a zerolog.Logger so its interoperable with Go's standard "log" package
+
+type AwsLogInterface interface {
+	// Logf is expected to support the standard fmt package "verbs".
+	Logf(classification logging.Classification, format string, v ...interface{})
+}
+
+type RetryLogger struct {
+	Log *zerolog.Logger
+}
+
+func (l *RetryLogger) Logf(classification logging.Classification, format string, v ...interface{}) {
+	switch classification {
+	case "WARN":
+		l.Log.Warn().Msgf(format, v...)
+	case "DEBUG":
+		if strings.Contains(format, "retrying request") {
+			l.Log.Info().Msgf(format, v...)
+		} else {
+			l.Log.Debug().Msgf(format, v...)
+		}
+	default:
+		l.Log.Error().Msgf(format, v...)
+	}
 }

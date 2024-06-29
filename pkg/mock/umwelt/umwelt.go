@@ -10,6 +10,7 @@ import (
 
 func FromCwd(ctx context.Context, cwd string, gitMock gitlib.DotGit, awsConfig aws.Config) umwelt.Here {
 	return umwelt.Here{
+		Cwd: cwd,
 		Caller: umwelt.ThisCaller{
 			Id:      "user-123",
 			Arn:     "arn:aws:iam::123456789012:user/test",
@@ -21,8 +22,12 @@ func FromCwd(ctx context.Context, cwd string, gitMock gitlib.DotGit, awsConfig a
 			Id:     "123456789013",
 			Region: "us-west-2",
 		},
+		Vpc: umwelt.ThisVpc{
+			SecurityGroupIds: nil,
+			SubnetIds:        nil,
+		},
 		ApiGateway: umwelt.ThisApiGateway{
-			Id: "mockApiId",
+			Id: nil,
 		},
 		Function:  umwelt.Selfish(cwd),
 		Functions: umwelt.SelfDiscovery(gitMock.Root),

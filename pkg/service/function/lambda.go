@@ -7,9 +7,17 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	types "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/smithy-go"
+	"github.com/rs/zerolog/log"
+)
+
+const (
+	shortRetry = 5
+	stdRetry   = 10
+	longRetry  = 15
 )
 
 func (s Service) List(ctx context.Context, prefix string) ([]lambda.GetFunctionOutput, error) {
@@ -39,106 +47,91 @@ func (s Service) List(ctx context.Context, prefix string) ([]lambda.GetFunctionO
 	return functions, nil
 }
 
-func (s Service) PutFunction(ctx context.Context, name string, roleArn string, imageUri string, arch types.Architecture, ephemeralStorage, memorySize, timeout int32, tags map[string]string) (*lambda.GetFunctionOutput, error) {
+func (s Service) PutFunction(ctx context.Context, put *lambda.CreateFunctionInput, concurreny int32) (*lambda.GetFunctionOutput, error) {
 	var apiErr smithy.APIError
+	update := false
 
-	getFunctionInput := &lambda.GetFunctionInput{
-		FunctionName: aws.String(name),
-	}
+	_, err := s.Client.Lambda.CreateFunction(ctx, put, func(options *lambda.Options) {
+		options.Retryer = retry.AddWithErrorCodes(options.Retryer,
+			(*types.InvalidParameterValueException)(nil).ErrorCode(),
+		)
+		options.Retryer = retry.AddWithMaxAttempts(options.Retryer, longRetry)
+	})
 
-	createFunctionInput := &lambda.CreateFunctionInput{
-		FunctionName:  aws.String(name),
-		Role:          aws.String(roleArn),
-		Architectures: []types.Architecture{arch},
-		Code: &types.FunctionCode{
-			ImageUri: aws.String(imageUri),
-		},
-		PackageType: types.PackageTypeImage,
-		EphemeralStorage: &types.EphemeralStorage{
-			Size: aws.Int32(ephemeralStorage),
-		},
-		MemorySize: aws.Int32(memorySize),
-		Timeout:    aws.Int32(timeout),
-		Tags:       tags,
-	}
-
-	putFunctionConcurrencyInput := &lambda.PutFunctionConcurrencyInput{
-		FunctionName:                 aws.String(name),
-		ReservedConcurrentExecutions: aws.Int32(5),
-	}
-
-	getFunctionOutput, err := s.Client.Lambda.GetFunction(ctx, getFunctionInput)
 	if errors.As(err, &apiErr) {
 		switch apiErr.ErrorCode() {
-		case "ResourceNotFoundException":
-			_, err := s.Client.Lambda.CreateFunction(ctx, createFunctionInput, func(options *lambda.Options) {
-				options.Retryer = retry.AddWithErrorCodes(options.Retryer, (*types.InvalidParameterValueException)(nil).ErrorCode())
-				options.Retryer = retry.AddWithMaxAttempts(options.Retryer, 10)
-			})
-
-			if err != nil {
-				return &lambda.GetFunctionOutput{}, err
-			}
-
-			_, err = s.Client.Lambda.PutFunctionConcurrency(ctx, putFunctionConcurrencyInput)
-			if err != nil {
-				return &lambda.GetFunctionOutput{}, err
-			}
-
-			return s.Client.Lambda.GetFunction(ctx, getFunctionInput)
+		case "ResourceConflictException":
+			update = true
 		default:
 			return &lambda.GetFunctionOutput{}, err
 		}
 	}
 
-	updateLambdaConfigurationInput := lambda.UpdateFunctionConfigurationInput{
-		FunctionName:     aws.String(name),
-		Role:             aws.String(roleArn),
-		ImageConfig:      createFunctionInput.ImageConfig,
-		MemorySize:       createFunctionInput.MemorySize,
-		EphemeralStorage: createFunctionInput.EphemeralStorage,
-		Timeout:          createFunctionInput.Timeout,
+	if update {
+		patchConfig := &lambda.UpdateFunctionConfigurationInput{
+			FunctionName: put.FunctionName,
+			Role:         put.Role,
+			MemorySize:   put.MemorySize,
+			Timeout:      put.Timeout,
+			VpcConfig:    put.VpcConfig,
+		}
+
+		patchCode := &lambda.UpdateFunctionCodeInput{
+			FunctionName:  put.FunctionName,
+			ImageUri:      put.Code.ImageUri,
+			Architectures: put.Architectures,
+			Publish:       true,
+		}
+
+		_, err = s.Client.Lambda.UpdateFunctionConfiguration(ctx, patchConfig, func(options *lambda.Options) {
+			options.Retryer = retry.AddWithMaxAttempts(options.Retryer, longRetry)
+			options.Retryer = retry.AddWithErrorCodes(options.Retryer,
+				(*types.InvalidParameterValueException)(nil).ErrorCode(),
+				(*types.ResourceConflictException)(nil).ErrorCode(),
+			)
+		})
+		if err != nil {
+			return &lambda.GetFunctionOutput{}, err
+		}
+
+		_, err = s.Client.Lambda.UpdateFunctionCode(ctx, patchCode, func(options *lambda.Options) {
+			options.Retryer = retry.AddWithMaxAttempts(options.Retryer, shortRetry)
+			options.Retryer = retry.AddWithErrorCodes(options.Retryer,
+				(*types.ResourceConflictException)(nil).ErrorCode(),
+			)
+		})
+		if err != nil {
+			return &lambda.GetFunctionOutput{}, err
+		}
 	}
 
-	updateFunctionCodeInput := lambda.UpdateFunctionCodeInput{
-		FunctionName:  aws.String(name),
-		ImageUri:      aws.String(imageUri),
-		Architectures: createFunctionInput.Architectures,
-		Publish:       true,
-	}
-
-	_, err = s.Client.Lambda.UpdateFunctionConfiguration(ctx, &updateLambdaConfigurationInput)
-
-	if err != nil {
-		return &lambda.GetFunctionOutput{}, err
-	}
-
-	_, err = s.Client.Lambda.UpdateFunctionCode(ctx, &updateFunctionCodeInput, func(options *lambda.Options) {
-		options.Retryer = retry.AddWithErrorCodes(options.Retryer, (*types.ResourceConflictException)(nil).ErrorCode())
-		options.Retryer = retry.AddWithMaxAttempts(options.Retryer, 10)
+	_, err = s.Client.Lambda.PutFunctionConcurrency(ctx, &lambda.PutFunctionConcurrencyInput{
+		FunctionName:                 put.FunctionName,
+		ReservedConcurrentExecutions: aws.Int32(concurreny),
 	})
-
 	if err != nil {
 		return &lambda.GetFunctionOutput{}, err
 	}
 
-	_, err = s.Client.Lambda.PutFunctionConcurrency(ctx, putFunctionConcurrencyInput)
+	function, err := s.Client.Lambda.GetFunction(ctx, &lambda.GetFunctionInput{
+		FunctionName: put.FunctionName,
+	})
 	if err != nil {
 		return &lambda.GetFunctionOutput{}, err
 	}
 
 	tagResourceInput := lambda.TagResourceInput{
-		Resource: aws.String(*getFunctionOutput.Configuration.FunctionArn),
-		Tags:     tags,
+		Resource: aws.String(*function.Configuration.FunctionArn),
+		Tags:     put.Tags,
 	}
-
 	_, err = s.Client.Lambda.TagResource(ctx, &tagResourceInput)
-
 	if err != nil {
 		return &lambda.GetFunctionOutput{}, err
 	}
 
-	return s.Client.Lambda.GetFunction(ctx, getFunctionInput)
+	return s.Client.Lambda.GetFunction(ctx, &lambda.GetFunctionInput{
+		FunctionName: put.FunctionName,
+	})
 }
 
 func (s Service) DeleteFunction(ctx context.Context, name string) (*lambda.DeleteFunctionOutput, error) {
@@ -146,5 +139,51 @@ func (s Service) DeleteFunction(ctx context.Context, name string) (*lambda.Delet
 		FunctionName: aws.String(name),
 	}
 
+	log.Info().Msgf("Function %s being deleted", name)
 	return s.Client.Lambda.DeleteFunction(ctx, &deleteInput)
+}
+
+func (s Service) PatchFunction(ctx context.Context, patch *lambda.UpdateFunctionConfigurationInput) (*lambda.GetFunctionConfigurationOutput, error) {
+	_, err := s.Client.Lambda.UpdateFunctionConfiguration(ctx, patch, func(options *lambda.Options) {
+		options.Retryer = retry.AddWithMaxAttempts(options.Retryer, stdRetry)
+		options.Retryer = retry.AddWithErrorCodes(options.Retryer,
+			(*types.InvalidParameterValueException)(nil).ErrorCode(),
+			(*types.ResourceConflictException)(nil).ErrorCode())
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.Client.Lambda.GetFunctionConfiguration(ctx, &lambda.GetFunctionConfigurationInput{
+		FunctionName: patch.FunctionName,
+	})
+}
+
+func (s Service) EnsureEniGcRole(ctx context.Context) (*iam.GetRoleOutput, error) {
+	policyArn := "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+	trust := `{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Sid": "TrustLambda",
+				"Effect": "Allow",
+				"Principal": {
+					"Service": "lambda.amazonaws.com"
+				},
+				"Action": "sts:AssumeRole"
+			}
+		]
+	}`
+
+	role, err := s.PutRole(ctx, "AWSLambdaVPCAccessExecutionRole", trust, map[string]string{})
+	if err != nil {
+		return &iam.GetRoleOutput{}, err
+	}
+
+	_, err = s.AttachPolicyToRole(ctx, policyArn, *role.Role.RoleName)
+	if err != nil {
+		return &iam.GetRoleOutput{}, err
+	}
+
+	return role, nil
 }

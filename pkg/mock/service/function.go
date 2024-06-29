@@ -61,8 +61,13 @@ func (m *MockFunctionService) DetachPolicyFromRole(ctx context.Context, policyAr
 	return args.Get(0).(*iam.DetachRolePolicyOutput), args.Error(1)
 }
 
-func (m *MockFunctionService) PutFunction(ctx context.Context, name string, roleArn string, imageUri string, arch types.Architecture, ephemeralStorage, memorySize, timeout int32, tags map[string]string) (*lambda.GetFunctionOutput, error) {
-	args := m.Called(ctx, name, roleArn, imageUri, arch, ephemeralStorage, memorySize, timeout, tags)
+func (m *MockFunctionService) PatchFunction(ctx context.Context, patch *lambda.UpdateFunctionConfigurationInput) (*lambda.GetFunctionConfigurationOutput, error) {
+	args := m.Called(ctx, patch)
+	return args.Get(0).(*lambda.GetFunctionConfigurationOutput), args.Error(1)
+}
+
+func (m *MockFunctionService) PutFunction(ctx context.Context, input *lambda.CreateFunctionInput, concurreny int32) (*lambda.GetFunctionOutput, error) {
+	args := m.Called(ctx, input, concurreny)
 	return args.Get(0).(*lambda.GetFunctionOutput), args.Error(1)
 }
 
@@ -74,6 +79,11 @@ func (m *MockFunctionService) DeleteFunction(ctx context.Context, name string) (
 func (m *MockFunctionService) GetRolePolicies(ctx context.Context, name string) (*iam.ListAttachedRolePoliciesOutput, error) {
 	args := m.Called(ctx, name)
 	return args.Get(0).(*iam.ListAttachedRolePoliciesOutput), args.Error(1)
+}
+
+func (m *MockFunctionService) EnsureEniGcRole(ctx context.Context) (*iam.GetRoleOutput, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(*iam.GetRoleOutput), args.Error(1)
 }
 
 // Mock Responses
@@ -102,6 +112,10 @@ func MockGetFunctionOutput(config config.Config, namespace, functionName string)
 			FunctionArn:  aws.String(fmt.Sprintf("arn:aws:lambda:us-west-2:123456789012:function:%s", resourceName)),
 			FunctionName: aws.String(resourceName),
 			LastModified: aws.String("2021-07-01T00:00:00Z"),
+			VpcConfig: &types.VpcConfigResponse{
+				SubnetIds:        config.Vpc.SubnetIds,
+				SecurityGroupIds: config.Vpc.SecurityGroupIds,
+			},
 		},
 		Tags: map[string]string{
 			"NameSpace": namespace,

@@ -8,7 +8,6 @@ import (
 
 	"github.com/alexflint/go-arg"
 	"github.com/jedib0t/go-pretty/table"
-	"github.com/linecard/self/internal/labelgun"
 
 	"github.com/rs/zerolog/log"
 )
@@ -21,6 +20,10 @@ type InspectOpts struct {
 	Tag string `arg:"-t,--tag,env:DEFAULT_RELEASE_BRANCH"`
 }
 
+type BusesOpts struct {
+	NameSpace string `arg:"-n,--namespace,env:DEFAULT_DEPLOYMENT_NAMESPACE"`
+}
+
 type FunctionScope struct {
 	RepoScope
 	Run     *NullCommand    `arg:"subcommand:run" help:"Deploy the function locally"`
@@ -30,7 +33,7 @@ type FunctionScope struct {
 	Disable *DeploymentOpts `arg:"subcommand:disable" help:"Unsubscribe deployment from buses"`
 	Publish *ReleaseOpts    `arg:"subcommand:publish" help:"Publish a release"`
 	Untag   *UntagOpts      `arg:"subcommand:untag" help:"Untag a release"`
-	Buses   *NullCommand    `arg:"subcommand:buses" help:"List deployment bus subscriptions"`
+	Buses   *BusesOpts      `arg:"subcommand:buses" help:"List deployment bus subscriptions"`
 	Inspect *InspectOpts    `arg:"subcommand:inspect" help:"Inspect a release"`
 }
 
@@ -90,12 +93,21 @@ func (f FunctionScope) DeployLocal(ctx context.Context) {
 		log.Fatal().Err(err).Msg("failed to build image")
 	}
 
-	content, err := labelgun.DecodeLabel(cfg.Label.Policy, image.Config.Labels)
+	labels, err := cfg.Labels.Decode(image.Config.Labels)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to decode policy label")
+		log.Fatal().Err(err).Msg("failed to decode labels")
 	}
 
-	policy, err := cfg.Template(content)
+	for k, v := range labels {
+		templatedValue, err := cfg.Template(v)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to render label template")
+		}
+
+		labels[k] = templatedValue
+	}
+
+	policy, err := cfg.Template(labels[cfg.Labels.Policy.Key])
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to render policy template")
 	}
@@ -231,7 +243,7 @@ func (f FunctionScope) UntagRelease(ctx context.Context) {
 }
 
 func (f FunctionScope) ListBuses(ctx context.Context) {
-	deployment, err := api.Deployment.Find(ctx, cfg.Git.Branch, cfg.Function.Name)
+	deployment, err := api.Deployment.Find(ctx, f.Buses.NameSpace, cfg.Function.Name)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find deployment")
 	}

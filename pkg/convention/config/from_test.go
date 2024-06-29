@@ -74,6 +74,13 @@ func defaultExpectation(mockGit gitlib.DotGit) Config {
 			Region: "us-west-2",
 			Url:    "123456789013.dkr.ecr.us-west-2.amazonaws.com",
 		},
+		Vpc: Vpc{
+			SubnetIds:        nil,
+			SecurityGroupIds: nil,
+		},
+		ApiGateway: ApiGateway{
+			Id: nil,
+		},
 		Git: Git{
 			Origin: "https://github.com/mockOrg/mockRepo.git",
 			Branch: mockGit.Branch,
@@ -93,15 +100,39 @@ func defaultExpectation(mockGit gitlib.DotGit) Config {
 			RegistryRegion:    "us-west-2",
 			RegistryAccountId: "123456789013",
 		},
-		Label: Label{
-			Role:      "org.linecard.self.role",
-			Policy:    "org.linecard.self.policy",
-			Sha:       "org.linecard.self.git-sha",
-			Bus:       "org.linecard.self.bus",
-			Resources: "org.linecard.self.resources",
-		},
-		Httproxy: Httproxy{
-			ApiId: "mockApiId",
+		Labels: Labels{
+			Schema: StringLabel{
+				Description: "Label schema version string",
+				Key:         "org.linecard.self.schema",
+				Content:     "1.0",
+			},
+			Sha: StringLabel{
+				Description: "Git sha string",
+				Key:         "org.linecard.self.git-sha",
+				Content:     mockGit.Sha,
+			},
+			Role: EmbeddedFileLabel{
+				Description: "Role template file",
+				Key:         "org.linecard.self.role",
+				Path:        "embedded/roles/lambda.json.tmpl",
+				Required:    true,
+			},
+			Policy: FileLabel{
+				Description: "Policy template file",
+				Key:         "org.linecard.self.policy",
+				Path:        "mockRepo/function-one/policy.json.tmpl",
+				Required:    true,
+			},
+			Resources: FileLabel{
+				Description: "Resources template file",
+				Key:         "org.linecard.self.resources",
+				Path:        "mockRepo/function-one/resources.json.tmpl",
+			},
+			Bus: FolderLabel{
+				Description: "Bus templates folder",
+				KeyPrefix:   "org.linecard.self.bus",
+				Path:        "mockRepo/function-one/bus",
+			},
 		},
 	}
 }

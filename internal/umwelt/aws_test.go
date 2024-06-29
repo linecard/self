@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDeploymentFind(t *testing.T) {
+func TestAWSPerception(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
@@ -24,15 +24,15 @@ func TestDeploymentFind(t *testing.T) {
 		{
 			name: "ECR discovery: from account",
 			setup: func(mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
-				os.Unsetenv("AWS_REGISTRY_ID")
-				os.Unsetenv("AWS_REGISTRY_REGION")
+				os.Unsetenv("AWS_ECR_REGISTRY_ID")
+				os.Unsetenv("AWS_ECR_REGISTRY_REGION")
 
 				mecr.On("DescribeRegistry", ctx, &ecr.DescribeRegistryInput{}).Return(&ecr.DescribeRegistryOutput{
 					RegistryId: aws.String("fetched_default_registry_id_from_account"),
 				}, nil)
 			},
 			test: func(t *testing.T, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
-				registryID, err := GetRegistryId(ctx, "AWS_REGISTRY_ID", mecr)
+				registryID, err := GetRegistryId(ctx, "AWS_ECR_REGISTRY_ID", mecr)
 				assert.NoError(t, err)
 				assert.Equal(t, "fetched_default_registry_id_from_account", registryID)
 			},
@@ -40,17 +40,17 @@ func TestDeploymentFind(t *testing.T) {
 		{
 			name: "ECR discovery: from env",
 			setup: func(mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
-				os.Setenv("AWS_REGISTRY_ID", "env_registry_id")
-				os.Setenv("AWS_REGISTRY_REGION", "env_registry_region")
+				os.Setenv("AWS_ECR_REGISTRY_ID", "env_registry_id")
+				os.Setenv("AWS_ECR_REGISTRY_REGION", "env_registry_region")
 			},
 			test: func(t *testing.T, mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
-				registryID, err := GetRegistryId(ctx, "AWS_REGISTRY_ID", mecr)
+				registryID, err := GetRegistryId(ctx, "AWS_ECR_REGISTRY_ID", mecr)
 				assert.NoError(t, err)
 				assert.Equal(t, "env_registry_id", registryID)
 			},
 			teardown: func(mecr *clientmock.MockECRClient, mgw *clientmock.MockApiGatewayClient) {
-				os.Unsetenv("AWS_REGISTRY_ID")
-				os.Unsetenv("AWS_REGISTRY_REGION")
+				os.Unsetenv("AWS_ECR_REGISTRY_ID")
+				os.Unsetenv("AWS_ECR_REGISTRY_REGION")
 			},
 		},
 	}

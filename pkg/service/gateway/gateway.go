@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/smithy-go"
 	"github.com/linecard/self/internal/util"
+	"github.com/rs/zerolog/log"
 )
 
 type ApiGatewayV2Client interface {
@@ -26,6 +27,7 @@ type ApiGatewayV2Client interface {
 	DeleteRoute(ctx context.Context, params *apigatewayv2.DeleteRouteInput, optFns ...func(*apigatewayv2.Options)) (*apigatewayv2.DeleteRouteOutput, error)
 	UpdateRoute(ctx context.Context, params *apigatewayv2.UpdateRouteInput, optFns ...func(*apigatewayv2.Options)) (*apigatewayv2.UpdateRouteOutput, error)
 	GetApi(ctx context.Context, params *apigatewayv2.GetApiInput, optFns ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApiOutput, error)
+	GetApis(ctx context.Context, params *apigatewayv2.GetApisInput, optFns ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error)
 }
 
 type LambdaClient interface {
@@ -199,7 +201,8 @@ func (s Service) DeleteIntegration(ctx context.Context, apiId string, route type
 	})
 
 	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NotFoundException" {
-		return fmt.Errorf("integration %s not found under api %s", integrationId, apiId)
+		log.Info().Msgf("integration %s not found under api %s", integrationId, apiId)
+		return nil
 	}
 
 	if err != nil {
@@ -218,7 +221,8 @@ func (s Service) DeleteRoute(ctx context.Context, apiId string, route types.Rout
 	})
 
 	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NotFoundException" {
-		return fmt.Errorf("route %s not found under api %s", *route.RouteKey, apiId)
+		log.Info().Msgf("route %s not found under api %s", *route.RouteKey, apiId)
+		return nil
 	}
 
 	if err != nil {
@@ -239,7 +243,8 @@ func (s Service) DeleteLambdaPermission(ctx context.Context, lambdaArn string, r
 	})
 
 	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "ResourceNotFoundException" {
-		return fmt.Errorf("permission for route %s not found", routePrefix)
+		log.Info().Msgf("no lambda permission not found for route %s", *route.RouteKey)
+		return nil
 	}
 
 	if err != nil {
@@ -253,6 +258,10 @@ func (s Service) GetApi(ctx context.Context, apiId string) (*apigatewayv2.GetApi
 	return s.Client.Gw.GetApi(ctx, &apigatewayv2.GetApiInput{
 		ApiId: aws.String(apiId),
 	})
+}
+
+func (s Service) GetApis(ctx context.Context) (*apigatewayv2.GetApisOutput, error) {
+	return s.Client.Gw.GetApis(ctx, &apigatewayv2.GetApisInput{})
 }
 
 func (s Service) GetRouteByRouteKey(ctx context.Context, apiId, routeKey string) (types.Route, error) {

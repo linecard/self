@@ -65,10 +65,11 @@ func TestRelease(t *testing.T) {
 			name: "convention.Build calls service.Build correctly",
 			setup: func(mbs *mockservice.MockBuildService, mrs *mockservice.MockRegistryService) {
 				expectedLabels := map[string]string{
+					"org.linecard.self.schema":          base64.StdEncoding.EncodeToString([]byte("1.0")),
+					"org.linecard.self.git-sha":         base64.StdEncoding.EncodeToString([]byte(config.Git.Sha)),
 					"org.linecard.self.bus.default.bus": mockfixture.Base64("bus.json.tmpl"),
 					"org.linecard.self.policy":          mockfixture.Base64("policy.json.tmpl"),
 					"org.linecard.self.role":            mockfixture.Base64("role.json.tmpl"),
-					"org.linecard.self.git-sha":         base64.StdEncoding.EncodeToString([]byte(config.Git.Sha)),
 				}
 
 				expectedTags := []string{

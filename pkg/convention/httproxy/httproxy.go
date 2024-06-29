@@ -3,9 +3,7 @@ package httproxy
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
-	"github.com/linecard/self/internal/labelgun"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/deployment"
 
@@ -19,6 +17,7 @@ import (
 
 type GatewayService interface {
 	GetApi(ctx context.Context, apiId string) (*apigatewayv2.GetApiOutput, error)
+	GetApis(ctx context.Context) (*apigatewayv2.GetApisOutput, error)
 	PutIntegration(ctx context.Context, apiId, lambdaArn, routeKey string) (*apigatewayv2.GetIntegrationOutput, error)
 	PutRoute(ctx context.Context, apiId, integrationId, routeKey string, awsAuth bool) (*apigatewayv2.GetRouteOutput, error)
 	PutLambdaPermission(ctx context.Context, apiId, lambdaArn, routeKey string) error
@@ -57,25 +56,36 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Converge")
 	defer span.End()
 
-	r, err := d.FetchRelease(ctx, c.Service.Registry, c.Config.Registry.Id)
+	if c.Config.ApiGateway.Id == nil {
+		log.Info().Msg("no api gateway defined, clearing associated proxy routes")
+		return c.Unmount(ctx, d)
+	}
+
+	release, err := d.FetchRelease(ctx, c.Service.Registry, c.Config.Registry.Id)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
-	if !labelgun.HasLabel(c.Config.Label.Resources, r.Config.Labels) {
-		if c.Config.Httproxy.ApiId == "" {
-			log.Warn().Msg("no api gateway defined, skipping httproxy umount")
-			return nil
-		}
+	// pull labels from release and base64 decode.
+	labels, err := c.Config.Labels.Decode(release.Config.Labels)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
 
-		if err := c.Unmount(ctx, d); err != nil {
+	// template decoded labels.
+	for k, v := range labels {
+		templatedValue, err := c.Config.Template(v)
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 
-		return nil
+		labels[k] = templatedValue
 	}
 
+	// Set default values for pertinent resources.json.tmpl settings.
 	resources := struct {
 		Http   bool `json:"http"`
 		Public bool `json:"public"`
@@ -84,68 +94,37 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 		Public: false,
 	}
 
-	resourcesTemplate, err := labelgun.DecodeLabel(c.Config.Label.Resources, r.Config.Labels)
-	if err != nil {
+	if err := json.Unmarshal([]byte(labels[c.Config.Labels.Resources.Key]), &resources); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
-	resourcesDocument, err := c.Config.Template(resourcesTemplate)
-	if err != nil {
-		return err
+	if !resources.Http {
+		return c.Unmount(ctx, d)
 	}
 
-	if err := json.Unmarshal([]byte(resourcesDocument), &resources); err != nil {
-		return err
-	}
-
-	if c.Config.Httproxy.ApiId == "" && resources.Http {
-		log.Warn().Msg("no api gateway defined, skipping httproxy mount")
-		return nil
-	}
-
-	if resources.Http {
-		if err := c.Mount(ctx, d, namespace, !resources.Public); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	if err := c.Unmount(ctx, d); err != nil {
-		return err
-	}
-
-	return nil
+	return c.Mount(ctx, d, namespace, !resources.Public)
 }
 
 func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespace string, awsAuth bool) error {
-	if c.Config.Httproxy.ApiId == "" {
-		log.Warn().Msg("no api gateway defined, skipping httproxy mount")
+	if c.Config.ApiGateway.Id == nil {
+		log.Info().Msg("no api gateway defined, skipping httproxy mount")
 		return nil
-	}
-
-	gw, err := c.Service.Gateway.GetApi(ctx, c.Config.Httproxy.ApiId)
-	if err != nil {
-		return err
 	}
 
 	routeKey := c.Config.RouteKey(namespace)
 
-	// This should also be enforced in IAM policy with a conditional.
-	if _, exist := gw.Tags["SelfDiscovery"]; !exist {
-		return fmt.Errorf("api gateway %s does not have SelfDiscovery tag", *gw.ApiId)
-	}
-
-	integration, err := c.Service.Gateway.PutIntegration(ctx, c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn, routeKey)
+	integration, err := c.Service.Gateway.PutIntegration(ctx, *c.Config.ApiGateway.Id, *d.Configuration.FunctionArn, routeKey)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.Service.Gateway.PutRoute(ctx, c.Config.Httproxy.ApiId, *integration.IntegrationId, routeKey, awsAuth)
+	_, err = c.Service.Gateway.PutRoute(ctx, *c.Config.ApiGateway.Id, *integration.IntegrationId, routeKey, awsAuth)
 	if err != nil {
 		return err
 	}
 
-	err = c.Service.Gateway.PutLambdaPermission(ctx, c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn, routeKey)
+	err = c.Service.Gateway.PutLambdaPermission(ctx, *c.Config.ApiGateway.Id, *d.Configuration.FunctionArn, routeKey)
 	if err != nil {
 		return err
 	}
@@ -157,47 +136,32 @@ func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error 
 	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Unmount")
 	defer span.End()
 
-	if c.Config.Httproxy.ApiId == "" {
-		log.Warn().Msg("no api gateway defined, skipping httproxy umount")
-		return nil
-	}
-
-	gw, err := c.Service.Gateway.GetApi(ctx, c.Config.Httproxy.ApiId)
+	apis, err := c.Service.Gateway.GetApis(ctx)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
-	// This should also be enforced in IAM policy with a conditional.
-	if _, exist := gw.Tags["SelfDiscovery"]; !exist {
-		err := fmt.Errorf("api gateway %s does not have SelfDiscovery tag", *gw.ApiId)
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-
-	routes, err := c.Service.Gateway.GetRoutesByFunctionArn(ctx, c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-
-	for _, route := range routes {
-		err = c.Service.Gateway.DeleteRoute(ctx, c.Config.Httproxy.ApiId, route)
+	for _, api := range apis.Items {
+		routes, err := c.Service.Gateway.GetRoutesByFunctionArn(ctx, *api.ApiId, *d.Configuration.FunctionArn)
 		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 
-		err = c.Service.Gateway.DeleteLambdaPermission(ctx, *d.Configuration.FunctionArn, route)
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return err
-		}
+		for _, route := range routes {
+			err = c.Service.Gateway.DeleteRoute(ctx, *api.ApiId, route)
+			if err != nil {
+				return err
+			}
 
-		err = c.Service.Gateway.DeleteIntegration(ctx, c.Config.Httproxy.ApiId, route)
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return err
+			err = c.Service.Gateway.DeleteLambdaPermission(ctx, *d.Configuration.FunctionArn, route)
+			if err != nil {
+				return err
+			}
+
+			err = c.Service.Gateway.DeleteIntegration(ctx, *api.ApiId, route)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -205,12 +169,12 @@ func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error 
 }
 
 func (c Convention) ListRoutes(ctx context.Context, d deployment.Deployment) ([]types.Route, error) {
-	return c.Service.Gateway.GetRoutesByFunctionArn(ctx, c.Config.Httproxy.ApiId, *d.Configuration.FunctionArn)
+	return c.Service.Gateway.GetRoutesByFunctionArn(ctx, *c.Config.ApiGateway.Id, *d.Configuration.FunctionArn)
 }
 
 // for view layer only
 func (c Convention) UnsafeListRoutes(ctx context.Context, d deployment.Deployment) ([]types.Route, error) {
-	if c.Config.Httproxy.ApiId == "" {
+	if c.Config.ApiGateway.Id == nil {
 		return []types.Route{}, nil
 	}
 	return c.ListRoutes(ctx, d)

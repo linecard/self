@@ -23,6 +23,9 @@ func FromHere(here umwelt.Here) (c Config) {
 	c.Registry.Region = here.Registry.Region
 	c.Registry.Url = c.Registry.Id + ".dkr.ecr." + c.Registry.Region + ".amazonaws.com"
 
+	c.Vpc.SecurityGroupIds = here.Vpc.SecurityGroupIds
+	c.Vpc.SubnetIds = here.Vpc.SubnetIds
+
 	c.Git.Origin = here.Git.Origin.String()
 	c.Git.Branch = here.Git.Branch
 	c.Git.Sha = here.Git.Sha
@@ -38,13 +41,45 @@ func FromHere(here umwelt.Here) (c Config) {
 	c.TemplateData.RegistryRegion = c.Registry.Region
 	c.TemplateData.RegistryAccountId = c.Registry.Id
 
-	c.Label.Role = "org.linecard.self.role"
-	c.Label.Policy = "org.linecard.self.policy"
-	c.Label.Sha = "org.linecard.self.git-sha"
-	c.Label.Bus = "org.linecard.self.bus"
-	c.Label.Resources = "org.linecard.self.resources"
+	c.Labels.Schema = StringLabel{
+		Description: "Label schema version string",
+		Key:         "org.linecard.self.schema",
+		Content:     "1.0",
+	}
 
-	c.Httproxy.ApiId = here.ApiGateway.Id
+	c.Labels.Sha = StringLabel{
+		Description: "Git sha string",
+		Key:         "org.linecard.self.git-sha",
+		Content:     c.Git.Sha,
+	}
+
+	c.Labels.Role = EmbeddedFileLabel{
+		Description: "Role template file",
+		Key:         "org.linecard.self.role",
+		Path:        "embedded/roles/lambda.json.tmpl",
+		Required:    true,
+	}
+
+	c.Labels.Policy = FileLabel{
+		Description: "Policy template file",
+		Key:         "org.linecard.self.policy",
+		Path:        filepath.Join(here.Cwd, "policy.json.tmpl"),
+		Required:    true,
+	}
+
+	c.Labels.Resources = FileLabel{
+		Description: "Resources template file",
+		Key:         "org.linecard.self.resources",
+		Path:        filepath.Join(here.Cwd, "resources.json.tmpl"),
+	}
+
+	c.Labels.Bus = FolderLabel{
+		Description: "Bus templates folder",
+		KeyPrefix:   "org.linecard.self.bus",
+		Path:        filepath.Join(here.Cwd, "bus"),
+	}
+
+	c.ApiGateway.Id = here.ApiGateway.Id
 
 	return
 }

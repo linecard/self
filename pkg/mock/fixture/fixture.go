@@ -1,8 +1,10 @@
 package mock
 
 import (
+	"bytes"
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -58,18 +60,27 @@ func Base64(src string) string {
 		log.Fatal().Err(err).Msgf("failed to read source file: %v", err)
 	}
 
-	chomped := JsonChomp(string(content))
+	compacted, err := JsonCompact(content)
+	if err != nil {
+		log.Fatal().Err(err).Msgf("failed to compact JSON: %v", err)
+	}
 
 	// Encode the content to Base64
-	return base64.StdEncoding.EncodeToString([]byte(chomped))
+	return base64.StdEncoding.EncodeToString(compacted)
 }
 
-// this is should get refactored out, it's just a copy paste of a string manipulation that happens in labelgun
-func JsonChomp(content string) string {
-	for _, char := range []string{"\n", "\t"} {
-		content = strings.ReplaceAll(content, char, "")
+func JsonCompact(byteContent []byte) ([]byte, error) {
+	compacted := new(bytes.Buffer)
+
+	if !json.Valid(byteContent) {
+		return []byte{}, fmt.Errorf("invalid JSON in fixture")
 	}
-	return content
+
+	if err := json.Compact(compacted, byteContent); err != nil {
+		return []byte{}, err
+	}
+
+	return compacted.Bytes(), nil
 }
 
 func Read(src string) string {

@@ -4,14 +4,17 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/linecard/self/internal/gitlib"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/linecard/self/internal/util"
@@ -29,6 +32,12 @@ type STSClient interface {
 
 type ECRClient interface {
 	DescribeRegistry(ctx context.Context, params *ecr.DescribeRegistryInput, optFns ...func(*ecr.Options)) (*ecr.DescribeRegistryOutput, error)
+}
+
+type Ec2Client interface {
+	DescribeVpcs(ctx context.Context, params *ec2.DescribeVpcsInput, optFns ...func(*ec2.Options)) (*ec2.DescribeVpcsOutput, error)
+	DescribeSubnets(ctx context.Context, params *ec2.DescribeSubnetsInput, optFns ...func(*ec2.Options)) (*ec2.DescribeSubnetsOutput, error)
+	DescribeSecurityGroups(ctx context.Context, params *ec2.DescribeSecurityGroupsInput, optFns ...func(*ec2.Options)) (*ec2.DescribeSecurityGroupsOutput, error)
 }
 
 type ApiGatewayClient interface {
@@ -49,7 +58,12 @@ type ThisRegistry struct {
 }
 
 type ThisApiGateway struct {
-	Id string
+	Id *string
+}
+
+type ThisVpc struct {
+	SubnetIds        []string
+	SecurityGroupIds []string
 }
 
 type ThisCaller struct {
@@ -65,15 +79,19 @@ type ThisFunction struct {
 }
 
 type Here struct {
+	Cwd        string
 	Caller     ThisCaller
 	Git        gitlib.DotGit
 	Registry   ThisRegistry
 	ApiGateway ThisApiGateway
+	Vpc        ThisVpc
 	Function   *ThisFunction
 	Functions  []ThisFunction
 }
 
-func FromCwd(ctx context.Context, cwd string, git gitlib.DotGit, awsConfig aws.Config, ecrc ECRClient, gwc ApiGatewayClient, stsc STSClient) (here Here, err error) {
+func FromCwd(ctx context.Context, cwd string, git gitlib.DotGit, awsConfig aws.Config, ecrc ECRClient, stsc STSClient) (here Here, err error) {
+	here.Cwd = cwd
+
 	// Caller
 	whoAmI := &sts.GetCallerIdentityInput{}
 	caller, err := stsc.GetCallerIdentity(ctx, whoAmI)
@@ -100,15 +118,26 @@ func FromCwd(ctx context.Context, cwd string, git gitlib.DotGit, awsConfig aws.C
 	}
 
 	// Gateway
-	here.ApiGateway.Id, err = GetApiGatewayId("AWS_API_GATEWAY_ID", gwc)
-	if err != nil {
-		return here, err
+	if gwId, exists := os.LookupEnv("AWS_API_GATEWAY_ID"); exists {
+		here.ApiGateway.Id = &gwId
+	}
+
+	// Security Groups
+	if sgIds, exists := os.LookupEnv("AWS_SECURITY_GROUP_IDS"); exists {
+		splitIds := strings.Split(sgIds, ",")
+		here.Vpc.SecurityGroupIds = splitIds
+	}
+
+	// Subnets
+	if snIds, exists := os.LookupEnv("AWS_SUBNET_IDS"); exists {
+		splitIds := strings.Split(snIds, ",")
+		here.Vpc.SubnetIds = splitIds
 	}
 
 	return here, nil
 }
 
-func FromEvent(ctx context.Context, event events.ECRImageActionEvent, awsConfig aws.Config, ecrc ECRClient, gwc ApiGatewayClient, stsc STSClient) (here Here, err error) {
+func FromEvent(ctx context.Context, event events.ECRImageActionEvent, awsConfig aws.Config, ecrc ECRClient, stsc STSClient) (here Here, err error) {
 	// Caller
 	whoAmI := &sts.GetCallerIdentityInput{}
 	whoIAm, err := stsc.GetCallerIdentity(ctx, whoAmI)
@@ -145,9 +174,20 @@ func FromEvent(ctx context.Context, event events.ECRImageActionEvent, awsConfig 
 	}
 
 	// Gateway
-	here.ApiGateway.Id, err = GetApiGatewayId("AWS_API_GATEWAY_ID", gwc)
-	if err != nil {
-		return here, err
+	if gwId, exists := os.LookupEnv("AWS_API_GATEWAY_ID"); exists {
+		here.ApiGateway.Id = &gwId
+	}
+
+	// Security Groups
+	if sgIds, exists := os.LookupEnv("AWS_SECURITY_GROUP_IDS"); exists {
+		splitIds := strings.Split(sgIds, ",")
+		here.Vpc.SecurityGroupIds = splitIds
+	}
+
+	// Subnets
+	if snIds, exists := os.LookupEnv("AWS_SUBNET_IDS"); exists {
+		splitIds := strings.Split(snIds, ",")
+		here.Vpc.SubnetIds = splitIds
 	}
 
 	return here, nil
