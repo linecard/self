@@ -78,14 +78,14 @@ func (s Service) InspectByTag(ctx context.Context, registryUrl, repository, tag 
 	return inspectData[0], nil
 }
 
-func (s Service) Build(ctx context.Context, path string, labels map[string]string, tags []string) error {
+func (s Service) Build(ctx context.Context, functionPath, contextPath string, labels map[string]string, tags []string) error {
 	envs := []string{
 		"DOCKER_BUILDKIT=1",
 	}
 
 	args := []string{
 		"build",
-		"-f", path + "/Dockerfile",
+		"-f", functionPath + "/Dockerfile",
 	}
 
 	for _, tag := range tags {
@@ -96,7 +96,7 @@ func (s Service) Build(ctx context.Context, path string, labels map[string]strin
 		args = append(args, "--label", fmt.Sprintf("%s=%s", key, value))
 	}
 
-	args = append(args, path)
+	args = append(args, contextPath)
 
 	cmd := exec.CommandContext(ctx, s.Binary, args...)
 	cmd.Env = append(os.Environ(), envs...)

@@ -77,14 +77,14 @@ func TestRelease(t *testing.T) {
 					"123456789013.dkr.ecr.us-west-2.amazonaws.com/mockOrg/mockRepo/function-one:4eeac06a6b0d37a30bd45775b19e59a06c3b6295",
 				}
 
-				mbs.On("Build", mock.Anything, config.Function.Path, expectedLabels, expectedTags).Return((error)(nil))
+				mbs.On("Build", mock.Anything, config.Function.Path, config.Function.Path, expectedLabels, expectedTags).Return((error)(nil))
 
 				mockImageInspect := mockservice.MockImageInspect(config, nil)
 				mbs.On("InspectByTag", mock.Anything, config.Registry.Url, config.Repository.Prefix+"/"+config.Function.Name, "4eeac06a6b0d37a30bd45775b19e59a06c3b6295").Return(mockImageInspect, (error)(nil))
 			},
 			test: func(t *testing.T, mbs *mockservice.MockBuildService, mrs *mockservice.MockRegistryService) {
 				releases := FromServices(config, mrs, mbs)
-				image, err := releases.Build(ctx, config.Function.Path, config.Git.Branch, config.Git.Sha)
+				image, err := releases.Build(ctx, config.Function.Path, config.Function.Path, config.Git.Branch, config.Git.Sha)
 				assert.IsType(t, Image{}, image)
 				assert.NoError(t, err)
 			},

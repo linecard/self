@@ -34,6 +34,8 @@ type ReleaseOpts struct {
 	EnsureRepository bool `arg:"-r,--ensure-repository,env:ENSURE_REPOSITORY"`
 	// Default: false
 	Login bool `arg:"-l,--ecr-login" help:"Login to ECR"`
+	// Default: the current function path.
+	Context string `arg:"-c,--context" help:"Function build context"`
 	// Default: false
 	SSHAgent bool `arg:"-a,--ssh-agent" help:"mount ssh-agent into build (TODO)"`
 }

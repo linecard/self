@@ -1,5 +1,7 @@
 .aws-lambda-rie
+.direnv
 dist
 main
 mockRepo
 justfile
+result

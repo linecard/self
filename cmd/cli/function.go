@@ -12,10 +12,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type UntagOpts struct {
-	Tag string `arg:"-t,--tag,env:DEFAULT_RELEASE_BRANCH"`
-}
-
 type InspectOpts struct {
 	Tag string `arg:"-t,--tag,env:DEFAULT_RELEASE_BRANCH"`
 }
@@ -24,9 +20,17 @@ type BusesOpts struct {
 	NameSpace string `arg:"-n,--namespace,env:DEFAULT_DEPLOYMENT_NAMESPACE"`
 }
 
+type UntagOpts struct {
+	Tag string `arg:"-t,--tag,env:DEFAULT_RELEASE_BRANCH"`
+}
+
+type RunOpts struct {
+	Context string `arg:"-c,--context" help:"Function build context"`
+}
+
 type FunctionScope struct {
 	RepoScope
-	Run     *NullCommand    `arg:"subcommand:run" help:"Deploy the function locally"`
+	Run     *RunOpts        `arg:"subcommand:run" help:"Deploy the function locally"`
 	Deploy  *DeploymentOpts `arg:"subcommand:deploy" help:"Deploy function from release"`
 	Destroy *DeploymentOpts `arg:"subcommand:destroy" help:"Destroy deployment of release"`
 	Enable  *DeploymentOpts `arg:"subcommand:enable" help:"Subscribe deployment to release bus definitions"`
@@ -88,7 +92,12 @@ func (f FunctionScope) Handle(ctx context.Context) {
 }
 
 func (f FunctionScope) DeployLocal(ctx context.Context) {
-	image, err := api.Release.Build(ctx, cfg.Function.Path, cfg.Git.Branch, cfg.Git.Sha)
+	context := cfg.Function.Path
+	if f.Run.Context != "" {
+		context = f.Run.Context
+	}
+
+	image, err := api.Release.Build(ctx, cfg.Function.Path, context, cfg.Git.Branch, cfg.Git.Sha)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to build image")
 	}
@@ -223,8 +232,12 @@ func (f FunctionScope) PublishRelease(ctx context.Context) {
 	}
 
 	path := cfg.Function.Path
+	context := cfg.Function.Path
+	if f.Publish.Context != "" {
+		context = f.Publish.Context
+	}
 
-	image, err := api.Release.Build(ctx, path, f.Publish.Branch, f.Publish.Sha)
+	image, err := api.Release.Build(ctx, path, context, f.Publish.Branch, f.Publish.Sha)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to build image")
 	}
