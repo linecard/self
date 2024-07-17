@@ -4,8 +4,6 @@ import (
 	"context"
 	"os"
 
-	"github.com/linecard/self/internal/gitlib"
-	"github.com/linecard/self/internal/umwelt"
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/sdk"
@@ -29,11 +27,6 @@ func BeforeAll(ctx context.Context) {
 	tablec = table.NewWriter()
 	tablec.SetOutputMirror(os.Stdout)
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to determine working directory")
-	}
-
 	retryLogger := util.RetryLogger{
 		Log: &log.Logger,
 	}
@@ -41,6 +34,7 @@ func BeforeAll(ctx context.Context) {
 	awsConfig, err := awsconfig.LoadDefaultConfig(ctx,
 		awsconfig.WithLogger(&retryLogger),
 		awsconfig.WithClientLogMode(aws.LogRetries))
+
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load AWS configuration")
 	}
@@ -48,22 +42,13 @@ func BeforeAll(ctx context.Context) {
 	stsc = sts.NewFromConfig(awsConfig)
 	ecrc := ecr.NewFromConfig(awsConfig)
 
-	git, err := gitlib.FromCwd()
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to introspect git, are you in a git repository? does it have a remote origin?")
+	cfg = config.Config{}
+	if err := cfg.FromCwd(ctx, awsConfig, ecrc, stsc); err != nil {
+		log.Fatal().Err(err).Msg("failed to load configuration from cwd")
 	}
 
-	here, err := umwelt.FromCwd(ctx, cwd, git, awsConfig, ecrc, stsc)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to introspect surrounding environment")
-	}
-
-	cfg = config.FromHere(here)
-
-	os.Setenv("DEFAULT_RELEASE_BRANCH", cfg.Git.Branch)
-	os.Setenv("DEFAULT_RELEASE_SHA", cfg.Git.Sha)
-	os.Setenv("DEFAULT_DEPLOYMENT_TAG", cfg.Git.Branch)
-	os.Setenv("DEFAULT_DEPLOYMENT_NAMESPACE", cfg.Git.Branch)
+	os.Setenv("DEFAULT_BRANCH", cfg.Git.Branch)
+	os.Setenv("DEFAULT_SHA", cfg.Git.Sha)
 	os.Setenv("DEFAULT_ENSURE_REPOSITORY", "false")
 
 	if api, err = sdk.Init(ctx, awsConfig, cfg); err != nil {

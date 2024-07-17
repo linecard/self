@@ -2,7 +2,6 @@ package httproxy
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/deployment"
@@ -52,7 +51,7 @@ func FromServices(c config.Config, g GatewayService, r RegistryService) Conventi
 	}
 }
 
-func (c Convention) Converge(ctx context.Context, d deployment.Deployment, namespace string) error {
+func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error {
 	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Converge")
 	defer span.End()
 
@@ -67,64 +66,76 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment, names
 		return err
 	}
 
-	// pull labels from release and base64 decode.
-	labels, err := c.Config.Labels.Decode(release.Config.Labels)
+	dt, err := config.ReleaseSchema{}.Decode(
+		c.Config.Account.Id,
+		c.Config.Registry.Id,
+		c.Config.Registry.Region,
+		release.Config.Labels,
+	)
+
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
-	// template decoded labels.
-	for k, v := range labels {
-		templatedValue, err := c.Config.Template(v)
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return err
-		}
-
-		labels[k] = templatedValue
-	}
-
-	// Set default values for pertinent resources.json.tmpl settings.
-	resources := struct {
-		Http   bool `json:"http"`
-		Public bool `json:"public"`
-	}{
-		Http:   false,
-		Public: false,
-	}
-
-	if err := json.Unmarshal([]byte(labels[c.Config.Labels.Resources.Key]), &resources); err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-
-	if !resources.Http {
+	if !dt.Computed.Resources.Http {
 		return c.Unmount(ctx, d)
 	}
 
-	return c.Mount(ctx, d, namespace, !resources.Public)
+	return c.Mount(ctx, d)
 }
 
-func (c Convention) Mount(ctx context.Context, d deployment.Deployment, namespace string, awsAuth bool) error {
+func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 	if c.Config.ApiGateway.Id == nil {
 		log.Info().Msg("no api gateway defined, skipping httproxy mount")
 		return nil
 	}
 
-	routeKey := c.Config.RouteKey(namespace)
-
-	integration, err := c.Service.Gateway.PutIntegration(ctx, *c.Config.ApiGateway.Id, *d.Configuration.FunctionArn, routeKey)
+	release, err := d.FetchRelease(ctx, c.Service.Registry, c.Config.Registry.Id)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.Service.Gateway.PutRoute(ctx, *c.Config.ApiGateway.Id, *integration.IntegrationId, routeKey, awsAuth)
+	dt, err := config.ReleaseSchema{}.Decode(
+		c.Config.Account.Id,
+		c.Config.Registry.Id,
+		c.Config.Registry.Region,
+		release.Config.Labels,
+	)
+
 	if err != nil {
 		return err
 	}
 
-	err = c.Service.Gateway.PutLambdaPermission(ctx, *c.Config.ApiGateway.Id, *d.Configuration.FunctionArn, routeKey)
+	integration, err := c.Service.Gateway.PutIntegration(
+		ctx, *c.Config.ApiGateway.Id,
+		*d.Configuration.FunctionArn,
+		dt.Computed.Resources.RouteKey,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	_, err = c.Service.Gateway.PutRoute(
+		ctx,
+		*c.Config.ApiGateway.Id,
+		*integration.IntegrationId,
+		dt.Computed.Resources.RouteKey,
+		dt.Computed.Resources.Public,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	err = c.Service.Gateway.PutLambdaPermission(
+		ctx,
+		*c.Config.ApiGateway.Id,
+		*d.Configuration.FunctionArn,
+		dt.Computed.Resources.RouteKey,
+	)
+
 	if err != nil {
 		return err
 	}

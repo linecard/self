@@ -240,57 +240,49 @@ func (c Convention) listDefined(ctx context.Context, d deployment.Deployment) ([
 		return []Subscription{}, err
 	}
 
-	// pull labels from release and base64 decode.
-	labels, err := c.Config.Labels.Decode(release.Config.Labels)
+	deploytime, err := config.ReleaseSchema{}.Decode(
+		c.Config.Account.Id,
+		c.Config.Registry.Id,
+		c.Config.Registry.Region,
+		release.Config.Labels,
+	)
+
 	if err != nil {
 		return []Subscription{}, err
 	}
 
-	// template decoded labels.
-	for k, v := range labels {
-		templatedValue, err := c.Config.Template(v)
-		if err != nil {
-			return []Subscription{}, err
+	for _, bus := range deploytime.Bus {
+		// TODO: refactor majority of this string munging into DeployTime.Computed
+
+		// drop the prefix
+		parts := strings.Replace(bus.Key, config.LabelKeys.Bus, "", 1)
+		// split remainder on dot
+		parts = strings.TrimPrefix(parts, ".")
+
+		// This is a bit fuzzy for my liking, if this warning makes noise, it's time to refactor.
+		if len(strings.Split(parts, ".")) > 2 {
+			log.Warn().Msgf("bus label suffix has too many parts: %v", parts)
 		}
 
-		labels[k] = templatedValue
-	}
+		// element 1 bus
+		busName := strings.Split(parts, ".")[0]
+		// element 2 rule
+		ruleName := strings.Split(parts, ".")[1]
+		ruleName = *d.Configuration.FunctionName + "-" + ruleName
 
-	// iterate over org.linecard.self.bus.* labels and resolve into list.
-	for label, value := range labels {
-		if strings.HasPrefix(label, c.Config.Labels.Bus.KeyPrefix) {
-			// drop the prefix
-			parts := strings.Replace(label, c.Config.Labels.Bus.KeyPrefix, "", 1)
-			// split remainder on dot
-			parts = strings.TrimPrefix(parts, ".")
-
-			if len(strings.Split(parts, ".")) > 2 {
-				// The surrounding code is a bit fuzzy for my liking, if this warning makes noise, it's time to refactor.
-				log.Warn().Msgf("bus label suffix has too many parts: %v", parts)
-			}
-
-			// element 1 bus
-			bus := strings.Split(parts, ".")[0]
-			// element 2 rule
-			rule := strings.Split(parts, ".")[1]
-
-			// prepend function name
-			rule = *d.Configuration.FunctionName + "-" + rule
-
-			subscriptions = append(subscriptions, Subscription{
-				event.JoinedRule{
-					Bus: types.EventBus{
-						Name: &bus,
-					},
-					Rule: types.Rule{
-						Name: &rule,
-					},
+		subscriptions = append(subscriptions, Subscription{
+			event.JoinedRule{
+				Bus: types.EventBus{
+					Name: &busName,
 				},
-				Meta{
-					Expression: value,
+				Rule: types.Rule{
+					Name: &ruleName,
 				},
-			})
-		}
+			},
+			Meta{
+				Expression: bus.Value,
+			},
+		})
 	}
 
 	return subscriptions, nil

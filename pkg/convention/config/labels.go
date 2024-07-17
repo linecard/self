@@ -11,6 +11,25 @@ import (
 	"strings"
 )
 
+type LabelKeyContract struct {
+	Schema    string
+	Name      string
+	Branch    string
+	Sha       string
+	Origin    string
+	Role      string
+	Policy    string
+	Resources string
+	Bus       string
+}
+
+type EncodedLabel struct {
+	Key   string
+	Value string
+}
+
+type DecodedLabel EncodedLabel
+
 type FileLabel struct {
 	Description string
 	Path        string
@@ -39,173 +58,192 @@ type StringLabel struct {
 	Required    bool
 }
 
-func (s StringLabel) Encode() (map[string]string, error) {
+var LabelKeys = LabelKeyContract{
+	Schema:    "org.linecard.self.schema",
+	Name:      "org.linecard.self.name",
+	Branch:    "org.linecard.self.git.branch",
+	Sha:       "org.linecard.self.git.sha",
+	Origin:    "org.linecard.self.git.origin",
+	Role:      "org.linecard.self.role",
+	Policy:    "org.linecard.self.policy",
+	Resources: "org.linecard.self.resources",
+	Bus:       "org.linecard.self.bus",
+}
+
+func (s StringLabel) Encode() (EncodedLabel, error) {
 	if s.Required && s.Content == "" {
-		return map[string]string{}, fmt.Errorf("label %s requirement failed", s.Key)
+		return EncodedLabel{}, fmt.Errorf("label %s requirement failed", s.Key)
 	}
 
-	return map[string]string{
-		s.Key: base64.StdEncoding.EncodeToString([]byte(s.Content)),
+	return EncodedLabel{
+		Key:   s.Key,
+		Value: base64.StdEncoding.EncodeToString([]byte(s.Content)),
 	}, nil
 }
 
-func (s StringLabel) Decode(labels map[string]string) (map[string]string, error) {
+func (s StringLabel) Decode(labels map[string]string) (DecodedLabel, error) {
 	for k, v := range labels {
 		if k == s.Key {
 			decoded, err := base64.StdEncoding.DecodeString(v)
 			if err != nil {
-				return map[string]string{}, err
+				return DecodedLabel{}, err
 			}
 
-			return map[string]string{
-				s.Key: string(decoded),
+			return DecodedLabel{
+				Key:   s.Key,
+				Value: string(decoded),
 			}, nil
 		}
 	}
 
 	if s.Required {
-		return map[string]string{}, fmt.Errorf("label %s not found", s.Key)
+		return DecodedLabel{}, fmt.Errorf("label %s required but not found", s.Key)
 	}
 
-	return map[string]string{}, nil
+	return DecodedLabel{}, nil
 }
 
-func (f EmbeddedFileLabel) Encode() (map[string]string, error) {
+func (f EmbeddedFileLabel) Encode() (EncodedLabel, error) {
 	var byteContent []byte
 	var err error
 
 	if _, err := fs.Stat(embedded, f.Path); err != nil {
 		if f.Required {
-			return map[string]string{}, err
+			return EncodedLabel{}, err
 		}
 
-		return map[string]string{}, nil
+		return EncodedLabel{}, nil
 	}
 
 	byteContent, err = fs.ReadFile(embedded, f.Path)
 	if err != nil {
-		return map[string]string{}, err
+		return EncodedLabel{}, err
 	}
 
 	if strings.Contains(f.Path, ".json") {
 		compacted := new(bytes.Buffer)
 
 		if !json.Valid(byteContent) {
-			return map[string]string{}, fmt.Errorf("invalid JSON in %s", f.Path)
+			return EncodedLabel{}, fmt.Errorf("invalid JSON in %s", f.Path)
 		}
 
 		if err := json.Compact(compacted, byteContent); err != nil {
-			return map[string]string{}, err
+			return EncodedLabel{}, err
 		}
 
 		encoded := base64.StdEncoding.EncodeToString(compacted.Bytes())
-		return map[string]string{
-			f.Key: encoded,
+		return EncodedLabel{
+			Key:   f.Key,
+			Value: encoded,
 		}, nil
 	}
 
 	chomped := strings.TrimSuffix(string(byteContent), "\r\n")
 	encoded := base64.StdEncoding.EncodeToString([]byte(chomped))
-	return map[string]string{
-		f.Key: encoded,
+	return EncodedLabel{
+		Key:   f.Key,
+		Value: encoded,
 	}, nil
 }
 
-func (f EmbeddedFileLabel) Decode(labels map[string]string) (map[string]string, error) {
+func (f EmbeddedFileLabel) Decode(labels map[string]string) (DecodedLabel, error) {
 	for k, v := range labels {
 		if k == f.Key {
 			decoded, err := base64.StdEncoding.DecodeString(v)
 			if err != nil {
-				return map[string]string{}, err
+				return DecodedLabel{}, err
 			}
 
-			return map[string]string{
-				f.Key: string(decoded),
+			return DecodedLabel{
+				Key:   f.Key,
+				Value: string(decoded),
 			}, nil
 		}
 	}
 
 	if f.Required {
-		return map[string]string{}, fmt.Errorf("label %s not found", f.Key)
+		return DecodedLabel{}, fmt.Errorf("label %s required but not found", f.Key)
+
 	}
 
-	return map[string]string{}, nil
+	return DecodedLabel{}, nil
 }
 
-func (f FileLabel) Encode() (map[string]string, error) {
+func (f FileLabel) Encode() (EncodedLabel, error) {
 	var byteContent []byte
 	var err error
 
 	if _, err := os.Stat(f.Path); err != nil {
 		if f.Required {
-			return map[string]string{}, err
+			return EncodedLabel{}, err
 		}
 
-		return map[string]string{}, nil
+		return EncodedLabel{}, nil
 	}
 
 	byteContent, err = os.ReadFile(f.Path)
 	if err != nil {
-		return map[string]string{}, err
+		return EncodedLabel{}, err
 	}
 
 	if strings.Contains(f.Path, ".json") {
 		compacted := new(bytes.Buffer)
 
 		if !json.Valid(byteContent) {
-			return map[string]string{}, fmt.Errorf("invalid JSON in %s", f.Path)
+			return EncodedLabel{}, fmt.Errorf("invalid JSON in %s", f.Path)
 		}
 
 		if err := json.Compact(compacted, byteContent); err != nil {
-			return map[string]string{}, err
+			return EncodedLabel{}, err
 		}
 
 		encoded := base64.StdEncoding.EncodeToString(compacted.Bytes())
-		return map[string]string{
-			f.Key: encoded,
+		return EncodedLabel{
+			Key:   f.Key,
+			Value: encoded,
 		}, nil
 	}
 
 	chomped := strings.TrimSuffix(string(byteContent), "\r\n")
 	encoded := base64.StdEncoding.EncodeToString([]byte(chomped))
-	return map[string]string{
-		f.Key: encoded,
+	return EncodedLabel{
+		Key:   f.Key,
+		Value: encoded,
 	}, nil
 }
 
-func (f FileLabel) Decode(labels map[string]string) (map[string]string, error) {
+func (f FileLabel) Decode(labels map[string]string) (DecodedLabel, error) {
 	for k, v := range labels {
 		if k == f.Key {
 			decoded, err := base64.StdEncoding.DecodeString(v)
 			if err != nil {
-				return map[string]string{}, err
+				return DecodedLabel{}, err
 			}
 
-			return map[string]string{
-				f.Key: string(decoded),
+			return DecodedLabel{
+				Key:   f.Key,
+				Value: string(decoded),
 			}, nil
 		}
 	}
 
 	if f.Required {
-		return map[string]string{}, fmt.Errorf("label %s not found", f.Key)
+		return DecodedLabel{}, fmt.Errorf("label %s required but not found", f.Key)
 	}
 
-	return map[string]string{}, nil
+	return DecodedLabel{}, nil
 }
 
-func (f FolderLabel) Encode() (map[string]string, error) {
-	encoded := make(map[string]string)
-
+func (f FolderLabel) Encode() (encodedFiles []EncodedLabel, err error) {
 	if _, err := os.Stat(f.Path); err != nil {
 		if f.Required {
-			return map[string]string{}, err
+			return encodedFiles, err
 		}
 
-		return map[string]string{}, nil
+		return encodedFiles, nil
 	}
 
-	err := filepath.Walk(f.Path, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(f.Path, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -234,167 +272,47 @@ func (f FolderLabel) Encode() (map[string]string, error) {
 				Required:    true,
 			}
 
-			content, err := fileLabel.Encode()
+			encodedFile, err := fileLabel.Encode()
 			if err != nil {
 				return err
 			}
 
-			for k, v := range content {
-				encoded[k] = v
-			}
+			encodedFiles = append(encodedFiles, encodedFile)
 		}
 
 		return nil
 	})
 
 	if err != nil {
-		return map[string]string{}, err
+		return encodedFiles, err
 	}
 
-	return encoded, nil
+	return encodedFiles, nil
 }
 
-func (f FolderLabel) Decode(labels map[string]string) (map[string]string, error) {
-	decoded := make(map[string]string)
-
+func (f FolderLabel) Decode(labels map[string]string) (decodedLabels []DecodedLabel, err error) {
 	for k, v := range labels {
 		if strings.HasPrefix(k, f.KeyPrefix) {
-			decodedValue, err := base64.StdEncoding.DecodeString(v)
+			decodedLabel, err := base64.StdEncoding.DecodeString(v)
 			if err != nil {
-				return map[string]string{}, err
+				return decodedLabels, err
 			}
 
-			decoded[k] = string(decodedValue)
+			decodedLabels = append(decodedLabels, DecodedLabel{
+				Key:   k,
+				Value: string(decodedLabel),
+			})
 		}
 	}
 
-	if f.Required && len(decoded) == 0 {
-		return map[string]string{}, fmt.Errorf("label %s not found", f.KeyPrefix)
+	if f.Required && len(decodedLabels) == 0 {
+		return decodedLabels, fmt.Errorf("no labels with prefix %s found, but required", f.KeyPrefix)
 	}
 
-	return decoded, nil
+	return decodedLabels, nil
 }
 
-func (l Labels) Encode(shaOverride *string) (map[string]string, error) {
-	schema, err := l.Schema.Encode()
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	if shaOverride != nil {
-		l.Sha.Content = *shaOverride
-	}
-
-	sha, err := l.Sha.Encode()
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	role, err := l.Role.Encode()
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	policy, err := l.Policy.Encode()
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	resources, err := l.Resources.Encode()
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	buses, err := l.Bus.Encode()
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	encoded := make(map[string]string)
-
-	for k, v := range schema {
-		encoded[k] = v
-	}
-
-	for k, v := range sha {
-		encoded[k] = v
-	}
-
-	for k, v := range role {
-		encoded[k] = v
-	}
-
-	for k, v := range policy {
-		encoded[k] = v
-	}
-
-	for k, v := range resources {
-		encoded[k] = v
-	}
-
-	for k, v := range buses {
-		encoded[k] = v
-	}
-
-	return encoded, nil
-}
-
-func (l Labels) Decode(labels map[string]string) (map[string]string, error) {
-	decoded := make(map[string]string)
-
-	schema, err := l.Schema.Decode(labels)
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	sha, err := l.Sha.Decode(labels)
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	role, err := l.Role.Decode(labels)
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	policy, err := l.Policy.Decode(labels)
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	resources, err := l.Resources.Decode(labels)
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	bus, err := l.Bus.Decode(labels)
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	for k, v := range schema {
-		decoded[k] = v
-	}
-
-	for k, v := range sha {
-		decoded[k] = v
-	}
-
-	for k, v := range role {
-		decoded[k] = v
-	}
-
-	for k, v := range policy {
-		decoded[k] = v
-	}
-
-	for k, v := range resources {
-		decoded[k] = v
-	}
-
-	for k, v := range bus {
-		decoded[k] = v
-	}
-
-	return decoded, nil
+func (l EncodedLabel) DecodedValue() string {
+	decoded, _ := base64.StdEncoding.DecodeString(l.Value)
+	return string(decoded)
 }

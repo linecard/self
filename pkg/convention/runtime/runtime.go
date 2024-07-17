@@ -9,10 +9,7 @@ import (
 	"runtime"
 
 	"github.com/linecard/self/pkg/convention/config"
-	"github.com/linecard/self/pkg/convention/release"
 	"github.com/linecard/self/pkg/service/docker"
-
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
 type RuntimeService interface {
@@ -37,35 +34,35 @@ func FromServices(c config.Config, r RuntimeService) Convention {
 	}
 }
 
-func (c Convention) Emulate(ctx context.Context, i release.Image, s *sts.AssumeRoleOutput) error {
-	command := append(i.Config.Entrypoint, i.Config.Cmd...)
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
+// func (c Convention) Emulate(ctx context.Context, i release.Image, s *sts.AssumeRoleOutput) error {
+// 	command := append(i.Config.Entrypoint, i.Config.Cmd...)
+// 	homeDir, err := os.UserHomeDir()
+// 	if err != nil {
+// 		return err
+// 	}
 
-	riePath, err := ensureBinary(homeDir)
-	if err != nil {
-		return err
-	}
+// 	riePath, err := ensureBinary(homeDir)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	deployInput := docker.DeployInput{
-		RiePath:         riePath,
-		Region:          c.Config.Account.Region,
-		ImageUri:        i.RepoTags[0],
-		Function:        c.Config.Function.Name,
-		Command:         command,
-		AccessKeyId:     *s.Credentials.AccessKeyId,
-		SecretAccessKey: *s.Credentials.SecretAccessKey,
-		SessionToken:    *s.Credentials.SessionToken,
-	}
+// 	deployInput := docker.DeployInput{
+// 		RiePath:         riePath,
+// 		Region:          c.Config.Account.Region,
+// 		ImageUri:        i.RepoTags[0],
+// 		Function:        c.Config.Function.Name,
+// 		Command:         command,
+// 		AccessKeyId:     *s.Credentials.AccessKeyId,
+// 		SecretAccessKey: *s.Credentials.SecretAccessKey,
+// 		SessionToken:    *s.Credentials.SessionToken,
+// 	}
 
-	if err := c.Service.Runtime.Deploy(ctx, deployInput); err != nil {
-		return err
-	}
+// 	if err := c.Service.Runtime.Deploy(ctx, deployInput); err != nil {
+// 		return err
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func ensureBinary(homeDir string) (string, error) {
 	var rieUrl string

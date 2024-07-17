@@ -3,26 +3,23 @@ package config
 import (
 	"context"
 	"embed"
-	"encoding/json"
 	"fmt"
-	"html/template"
-	"io/fs"
-	"os"
-	"path/filepath"
-	"strings"
 
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/linecard/self/internal/util"
+)
+
+const (
+	envEcrId     = "AWS_ECR_REGISTRY_ID"
+	envEcrRegion = "AWS_ECR_REGISTRY_REGION"
+	envGwId      = "AWS_API_GATEWAY_ID"
+	envSgIds     = "AWS_SECURITY_GROUP_IDS"
+	envSnIds     = "AWS_SUBNET_IDS"
 )
 
 //go:embed embedded/*
 var embedded embed.FS
-
-type Function struct {
-	Name string
-	Path string
-}
 
 type Caller struct {
 	Arn string
@@ -47,14 +44,6 @@ type Registry struct {
 	Url    string
 }
 
-type Repository struct {
-	Prefix string
-}
-
-type Resource struct {
-	Prefix string
-}
-
 type ApiGateway struct {
 	Id *string
 }
@@ -71,143 +60,92 @@ type TemplateData struct {
 	RegistryAccountId string
 }
 
-type Labels struct {
-	Schema    StringLabel
-	Sha       StringLabel
-	Role      EmbeddedFileLabel
-	Policy    FileLabel
-	Resources FileLabel
-	Bus       FolderLabel
-}
-
 type Config struct {
-	Function     *Function
-	Functions    []Function
+	Functions    []ReleaseSchema
 	Caller       Caller
 	Account      Account
 	Git          Git
 	Registry     Registry
-	Repository   Repository
-	Resource     Resource
 	ApiGateway   ApiGateway
 	Vpc          Vpc
 	TemplateData TemplateData
-	Labels       Labels
 	Version      string
 }
 
-// derived information
-func (c Config) ResourceName(namespace, functionName string) string {
-	return c.Resource.Prefix + "-" + util.DeSlasher(namespace) + "-" + functionName
-}
-
-func (c Config) RepositoryName() string {
-	return c.Repository.Prefix + "/" + c.Function.Name
-}
-
-func (c Config) RepositoryUrl() string {
-	return c.Registry.Url + "/" + c.RepositoryName()
-}
-
-func (c Config) RouteKey(namespace string) string {
-	verb := "ANY"
-	route := "/" + c.Resource.Prefix + "/" + namespace + "/" + c.Function.Name + "/{proxy+}"
-	routeKey := verb + " " + route
-	return routeKey
-}
-
-// helper methods
-func (c Config) Template(document string) (string, error) {
-	tmpl, err := template.New("document").Parse(string(document))
-	if err != nil {
-		return "", err
+func (c *Config) Function(name string) (ReleaseSchema, error) {
+	for _, rc := range c.Functions {
+		if rc.Name.Content == name {
+			return rc, nil
+		}
 	}
 
-	var b strings.Builder
-	if err := tmpl.Execute(&b, c.TemplateData); err != nil {
-		return "", err
-	}
-
-	return b.String(), nil
+	return ReleaseSchema{}, fmt.Errorf("function %s not found", name)
 }
 
-func (c Config) AssumeRoleWithPolicy(ctx context.Context, stsc *sts.Client, policy string) (*sts.AssumeRoleOutput, error) {
-	roleArn, err := util.RoleArnFromAssumeRoleArn(c.Caller.Arn)
-	if err != nil {
-		return nil, err
+func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClient, stsc STSClient) (err error) {
+	if err := c.DiscoverGit(ctx); err != nil {
+		return err
 	}
 
-	return stsc.AssumeRole(ctx, &sts.AssumeRoleInput{
-		RoleArn:         aws.String(roleArn),
-		RoleSessionName: aws.String(os.Getenv("USER") + "-masquerade"),
-		Policy:          &policy,
-	})
+	if err := c.DiscoverCaller(ctx, stsc, awsConfig); err != nil {
+		return err
+	}
+
+	if err := c.DiscoverRegistry(ctx, envEcrId, envEcrRegion, ecrc, awsConfig); err != nil {
+		return err
+	}
+
+	if err := c.DiscoverGateway(ctx, envGwId); err != nil {
+		return err
+	}
+
+	if err := c.DiscoverVpc(ctx, envSgIds, envSnIds); err != nil {
+		return err
+	}
+
+	if err := c.DiscoverFunctions(ctx); err != nil {
+		return err
+	}
+
+	c.TemplateData = TemplateData{
+		AccountId:         c.Account.Id,
+		Region:            c.Account.Region,
+		RegistryRegion:    c.Registry.Region,
+		RegistryAccountId: c.Registry.Id,
+	}
+
+	return nil
 }
 
-func (c Config) Json(ctx context.Context) (string, error) {
-	cJson, err := json.Marshal(c)
-	if err != nil {
-		return "", err
+func (c *Config) FromEvent(ctx context.Context, awsConfig aws.Config, ecrc ECRClient, stsc STSClient, event events.ECRImageActionEvent) (err error) {
+	if err := c.DiscoverCaller(ctx, stsc, awsConfig); err != nil {
+		return err
 	}
 
-	return string(cJson), nil
-}
-
-func (c Config) Scaffold(templateName, functionName string) error {
-	scaffoldPath := "embedded/scaffold"
-	templatePath := filepath.Join(scaffoldPath, templateName)
-
-	if _, err := embedded.ReadDir(templatePath); os.IsNotExist(err) {
-		templates, err := embedded.ReadDir(scaffoldPath)
-		if err != nil {
-			return err
-		}
-
-		var templateNames []string
-		for _, template := range templates {
-			templateNames = append(templateNames, template.Name())
-		}
-
-		return fmt.Errorf("scaffold %s does not exist. valid options: %s", templateName, strings.Join(templateNames, ", "))
+	if err := c.DiscoverRegistry(ctx, envEcrId, envEcrRegion, ecrc, awsConfig); err != nil {
+		return err
 	}
 
-	return fs.WalkDir(embedded, templatePath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
+	if err := c.DiscoverGateway(ctx, envGwId); err != nil {
+		return err
+	}
 
-		// Calculate the relative path with respect to templatePath
-		relPath, err := filepath.Rel(templatePath, path)
-		if err != nil {
-			return err
-		}
-		targetFilePath := filepath.Join(functionName, relPath)
+	if err := c.DiscoverVpc(ctx, envSgIds, envSnIds); err != nil {
+		return err
+	}
 
-		if d.IsDir() {
-			return os.MkdirAll(targetFilePath, os.ModePerm)
-		}
+	if util.ShaLike(event.Detail.ImageTag) {
+		c.Git.Sha = event.Detail.ImageTag
+	} else {
+		c.Git.Branch = event.Detail.ImageTag
+	}
 
-		content, err := fs.ReadFile(embedded, path)
-		if err != nil {
-			return err
-		}
+	c.TemplateData = TemplateData{
+		AccountId:         c.Account.Id,
+		Region:            c.Account.Region,
+		RegistryRegion:    c.Registry.Region,
+		RegistryAccountId: c.Registry.Id,
+	}
 
-		tmpl, err := template.New(filepath.Base(path)).Parse(string(content))
-		if err != nil {
-			return err
-		}
-
-		outputFile, err := os.Create(targetFilePath)
-		if err != nil {
-			return err
-		}
-		defer outputFile.Close()
-
-		err = tmpl.Execute(outputFile, c)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
+	return nil
 }
