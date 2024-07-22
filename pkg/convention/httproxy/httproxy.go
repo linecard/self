@@ -5,6 +5,7 @@ import (
 
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/deployment"
+	"github.com/linecard/self/pkg/convention/manifest"
 
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2/types"
@@ -66,11 +67,15 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error
 		return err
 	}
 
-	dt, err := config.ReleaseSchema{}.Decode(
-		c.Config.Account.Id,
-		c.Config.Registry.Id,
-		c.Config.Registry.Region,
-		release.Config.Labels,
+	mfst := manifest.New()
+	deploytime, err := mfst.Decode(
+		manifest.DecodeInput{
+			Labels:       release.Config.Labels,
+			Arch:         release.AWSArchitecture,
+			Uri:          release.Uri,
+			AccountId:    c.Config.Account.Id,
+			TemplateData: c.Config.TemplateData,
+		},
 	)
 
 	if err != nil {
@@ -78,7 +83,7 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error
 		return err
 	}
 
-	if !dt.Computed.Resources.Http {
+	if !deploytime.Computed.Resources.Http {
 		return c.Unmount(ctx, d)
 	}
 
@@ -96,11 +101,15 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 		return err
 	}
 
-	dt, err := config.ReleaseSchema{}.Decode(
-		c.Config.Account.Id,
-		c.Config.Registry.Id,
-		c.Config.Registry.Region,
-		release.Config.Labels,
+	mfst := manifest.New()
+	deploytime, err := mfst.Decode(
+		manifest.DecodeInput{
+			Labels:       release.Config.Labels,
+			Arch:         release.AWSArchitecture,
+			Uri:          release.Uri,
+			AccountId:    c.Config.Account.Id,
+			TemplateData: c.Config.TemplateData,
+		},
 	)
 
 	if err != nil {
@@ -110,7 +119,7 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 	integration, err := c.Service.Gateway.PutIntegration(
 		ctx, *c.Config.ApiGateway.Id,
 		*d.Configuration.FunctionArn,
-		dt.Computed.Resources.RouteKey,
+		deploytime.Computed.Resources.RouteKey,
 	)
 
 	if err != nil {
@@ -121,8 +130,8 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 		ctx,
 		*c.Config.ApiGateway.Id,
 		*integration.IntegrationId,
-		dt.Computed.Resources.RouteKey,
-		dt.Computed.Resources.Public,
+		deploytime.Computed.Resources.RouteKey,
+		deploytime.Computed.Resources.Public,
 	)
 
 	if err != nil {
@@ -133,7 +142,7 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 		ctx,
 		*c.Config.ApiGateway.Id,
 		*d.Configuration.FunctionArn,
-		dt.Computed.Resources.RouteKey,
+		deploytime.Computed.Resources.RouteKey,
 	)
 
 	if err != nil {

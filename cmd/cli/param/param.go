@@ -1,22 +1,22 @@
 package param
 
 type FunctionArg struct {
-	Name string `arg:"positional" help:"Name of function"`
+	Path string `arg:"positional" help:"path to function" default:"."`
 }
 
 type GitOpts struct {
-	Branch string `arg:"-b,--branch,env:DEFAULT_DEPLOYMENT_TAG"`
-	Sha    string `arg:"-s,--sha,env:DEFAULT_DEPLOYMENT_NAMESPACE"`
+	Branch string `arg:"-b,--branch,env:DEFAULT_BRANCH"`
+	Sha    string `arg:"-s,--sha,env:DEFAULT_SHA"`
 }
 
 type Init struct {
 	Language string `arg:"positional" help:"Language to scaffold"`
-	FunctionArg
+	Name     string `arg:"positional" help:"Name of function"`
 }
 
 type Build struct {
 	SSHAgent bool   `arg:"-a,--ssh-agent" help:"mount ssh-agent into build (TODO)"`
-	Context  string `arg:"-c,--context" help:"build context path" default:"."`
+	Context  string `arg:"-c,--build-context,env:DEFAULT_BUILD_CONTEXT" help:"build context path"`
 	GitOpts
 	FunctionArg
 }
@@ -26,7 +26,6 @@ type Release struct {
 	EnsureRepository bool `arg:"-r,--ensure-repository,env:DEFAULT_ENSURE_REPOSITORY"`
 	Build
 	GitOpts
-	FunctionArg
 }
 
 type Deploy struct {
@@ -41,10 +40,17 @@ type Destroy struct {
 
 type Releases struct {
 	GitOpts
+	FunctionArg
 }
 
 type Deployments struct {
 	GitOpts
+	FunctionArg
+}
+
+type Inspect struct {
+	GitOpts
+	FunctionArg
 }
 
 type Config struct {

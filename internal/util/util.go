@@ -12,7 +12,10 @@ import (
 )
 
 func DeSlasher(str string) string {
-	return strings.Replace(str, "/", "-", -1)
+	dashes := strings.Replace(str, "/", "-", -1)
+	dashes = strings.TrimSuffix(dashes, "-")
+	dashes = strings.TrimPrefix(dashes, "-")
+	return dashes
 }
 
 func ReSlasher(str string) string {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
+	"github.com/linecard/self/pkg/convention/manifest"
 
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
@@ -70,18 +71,18 @@ func FromServices(c config.Config, r RegistryService, b BuildService) Convention
 	}
 }
 
-func (c Convention) Find(ctx context.Context, repositoryName, tag string) (Release, error) {
+func (c Convention) Find(ctx context.Context, repositoryPath, tag string) (Release, error) {
 	ctx, span := otel.Tracer("").Start(ctx, "release.Find")
 	defer span.End()
 
-	inspect, err := c.Service.Registry.InspectByTag(ctx, c.Config.Registry.Id, repositoryName, tag)
+	inspect, err := c.Service.Registry.InspectByTag(ctx, c.Config.Registry.Id, repositoryPath, tag)
 
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err
 	}
 
-	uri, err := c.Service.Registry.ImageUri(ctx, c.Config.Registry.Id, c.Config.Registry.Url, repositoryName, tag)
+	uri, err := c.Service.Registry.ImageUri(ctx, c.Config.Registry.Id, c.Config.Registry.Url, repositoryPath, tag)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err
@@ -133,15 +134,15 @@ func (c Convention) List(ctx context.Context, repositoryName string) ([]ReleaseS
 	return releases, nil
 }
 
-func (c Convention) Build(ctx context.Context, buildtime config.BuildTime) (Image, error) {
+func (c Convention) Build(ctx context.Context, buildtime manifest.Release) (Image, error) {
 	tags := []string{
 		fmt.Sprintf("%s:%s",
 			buildtime.Computed.Repository.Url,
-			buildtime.Branch.DecodedValue(),
+			buildtime.Branch.Raw,
 		),
 		fmt.Sprintf("%s:%s",
 			buildtime.Computed.Repository.Url,
-			buildtime.Sha.DecodedValue(),
+			buildtime.Sha.Raw,
 		),
 	}
 
@@ -160,8 +161,8 @@ func (c Convention) Build(ctx context.Context, buildtime config.BuildTime) (Imag
 	inspect, err := c.Service.Build.InspectByTag(
 		ctx,
 		buildtime.Computed.Registry.Url,
-		buildtime.Computed.Repository.Name,
-		buildtime.Sha.DecodedValue(),
+		buildtime.Computed.Repository.Path,
+		buildtime.Sha.Raw,
 	)
 
 	if err != nil {

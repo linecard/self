@@ -5,8 +5,11 @@ import (
 	"embed"
 	"fmt"
 
+	"github.com/linecard/self/pkg/convention/manifest"
+
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/linecard/self/internal/gitlib"
 	"github.com/linecard/self/internal/util"
 )
 
@@ -32,6 +35,7 @@ type Account struct {
 
 type Git struct {
 	Origin string
+	Path   string
 	Branch string
 	Sha    string
 	Root   string
@@ -61,25 +65,25 @@ type TemplateData struct {
 }
 
 type Config struct {
-	Functions    []ReleaseSchema
-	Caller       Caller
-	Account      Account
-	Git          Git
-	Registry     Registry
-	ApiGateway   ApiGateway
-	Vpc          Vpc
-	TemplateData TemplateData
-	Version      string
+	BuildManifests []manifest.BuildTime
+	Caller         Caller
+	Account        Account
+	Git            gitlib.DotGit
+	Registry       Registry
+	ApiGateway     ApiGateway
+	Vpc            Vpc
+	TemplateData   TemplateData
+	Version        string
 }
 
-func (c *Config) Function(name string) (ReleaseSchema, error) {
-	for _, rc := range c.Functions {
-		if rc.Name.Content == name {
-			return rc, nil
+func (c *Config) Find(manifestName string) (manifest.BuildTime, error) {
+	for _, m := range c.BuildManifests {
+		if m.Name.Content == manifestName {
+			return m, nil
 		}
 	}
 
-	return ReleaseSchema{}, fmt.Errorf("function %s not found", name)
+	return manifest.BuildTime{}, fmt.Errorf("manifest not found for %s", manifestName)
 }
 
 func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClient, stsc STSClient) (err error) {

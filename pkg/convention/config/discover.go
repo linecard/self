@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/linecard/self/internal/gitlib"
-	"github.com/linecard/self/internal/util"
+	"github.com/linecard/self/pkg/convention/manifest"
 )
 
 type STSClient interface {
@@ -92,13 +92,8 @@ func (c *Config) DiscoverVpc(ctx context.Context, sgEnvar, snEnvar string) (err 
 }
 
 func (c *Config) DiscoverGit(ctx context.Context) (err error) {
-	if git, err := gitlib.FromCwd(); err == nil {
-		c.Git.Branch = git.Branch
-		c.Git.Sha = git.Sha
-		c.Git.Root = git.Root
-		c.Git.Origin = git.Origin.String()
-		c.Git.Dirty = git.Dirty
-		return nil
+	if c.Git, err = gitlib.FromCwd(); err != nil {
+		return err
 	}
 	return err
 }
@@ -123,79 +118,16 @@ func (c *Config) DiscoverFunctions(ctx context.Context) (err error) {
 		}
 
 		if info.IsDir() && selfish(path) {
+			var mfst manifest.Release
+			var bt manifest.BuildTime
 
-			name := filepath.Base(path)
-			resourcePrefix := strings.Replace(strings.TrimPrefix(c.Git.Origin, "/"), ".git", "", 1)
-			urlPrefix := strings.Replace(filepath.Base(c.Git.Origin), ".git", "", 1)
-			c.Functions = append(c.Functions, ReleaseSchema{
-				Path: path,
-				Computed: Computed{
-					Registry: ComputedRegistry{
-						Url: c.Registry.Url,
-					},
-					Repository: ComputedRepository{
-						Prefix: urlPrefix,
-						Name:   name,
-						Url:    fmt.Sprintf("%s/%s", c.Registry.Url, name),
-					},
-					Resource: ComputedResource{
-						Prefix: resourcePrefix,
-						Name:   resourcePrefix + "-" + util.DeSlasher(c.Git.Branch) + "-" + name,
-					},
-				},
-				Schema: StringLabel{
-					Description: "Label schema version string",
-					Key:         LabelKeys.Schema,
-					Content:     "1.1",
-					Required:    true,
-				},
-				Name: StringLabel{
-					Description: "Function name string",
-					Key:         LabelKeys.Name,
-					Content:     name,
-					Required:    true,
-				},
-				Branch: StringLabel{
-					Description: "Git branch string",
-					Key:         LabelKeys.Branch,
-					Content:     c.Git.Branch,
-					Required:    true,
-				},
-				Sha: StringLabel{
-					Description: "Git sha string",
-					Key:         LabelKeys.Sha,
-					Content:     c.Git.Sha,
-					Required:    true,
-				},
-				Origin: StringLabel{
-					Description: "Git origin string",
-					Key:         LabelKeys.Origin,
-					Content:     c.Git.Origin,
-					Required:    true,
-				},
-				Role: EmbeddedFileLabel{
-					Description: "Role template file",
-					Key:         LabelKeys.Role,
-					Path:        "embedded/roles/lambda.json.tmpl",
-					Required:    true,
-				},
-				Policy: FileLabel{
-					Description: "Policy template file",
-					Key:         LabelKeys.Policy,
-					Path:        filepath.Join(path, "policy.json.tmpl"),
-					Required:    true,
-				},
-				Resources: FileLabel{
-					Description: "Resources template file",
-					Key:         LabelKeys.Resources,
-					Path:        filepath.Join(path, "resources.json.tmpl"),
-				},
-				Bus: FolderLabel{
-					Description: "Bus templates path",
-					KeyPrefix:   LabelKeys.Bus,
-					Path:        filepath.Join(path, "bus"),
-				},
-			})
+			mfst = manifest.New()
+
+			if bt, err = mfst.Encode(path, c.Git); err != nil {
+				return err
+			}
+
+			c.BuildManifests = append(c.BuildManifests, bt)
 		}
 
 		return nil

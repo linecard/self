@@ -12,6 +12,7 @@ import (
 )
 
 type DotGit struct {
+	// Path   string
 	Branch string
 	Sha    string
 	Root   string
@@ -46,6 +47,10 @@ func FromCwd() (found DotGit, err error) {
 		return DotGit{}, err
 	}
 
+	// if found.Path, err = Path(thisRepo); err != nil {
+	// 	return DotGit{}, err
+	// }
+
 	found.Root = thisRepoPath
 
 	return found, nil
@@ -78,6 +83,15 @@ func Head(repo *git.Repository) (plumbing.Reference, error) {
 
 	return *head, nil
 }
+
+// func Path(repo *git.Repository) (string, error) {
+// 	origin, err := Origin(repo)
+// 	if err != nil {
+// 		return "", err
+// 	}
+
+// 	return strings.TrimSuffix(origin.Path, ".git"), nil
+// }
 
 func Branch(repo *git.Repository) (string, error) {
 	head, err := Head(repo)

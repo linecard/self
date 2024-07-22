@@ -20,6 +20,7 @@ type Root struct {
 	Deploy      *param.Deploy      `arg:"subcommand:deploy" help:"Deploy a release"`
 	Deployments *param.Deployments `arg:"subcommand:deployments" help:"List release deployments"`
 	Destroy     *param.Destroy     `arg:"subcommand:destroy" help:"Destroy a release deployment"`
+	Inspect     *param.Inspect     `arg:"subcommand:inspect" help:"Inspect a release"`
 	Config      *param.Config      `arg:"subcommand:config" help:"Print configuration"`
 }
 
@@ -45,6 +46,9 @@ func (c Root) Handle(ctx context.Context, cfg config.Config, api sdk.API) {
 
 	case c.Destroy != nil:
 		method.DestroyDeployment(ctx, cfg, api, c.Destroy)
+
+	case c.Inspect != nil:
+		method.InspectRelease(ctx, cfg, api, c.Inspect)
 
 	case c.Config != nil:
 		method.PrintConfig(ctx, cfg, api, c.Config)

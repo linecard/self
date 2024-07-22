@@ -7,6 +7,7 @@ import (
 
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/deployment"
+	"github.com/linecard/self/pkg/convention/manifest"
 	"github.com/linecard/self/pkg/service/event"
 	"github.com/rs/zerolog/log"
 
@@ -240,22 +241,26 @@ func (c Convention) listDefined(ctx context.Context, d deployment.Deployment) ([
 		return []Subscription{}, err
 	}
 
-	deploytime, err := config.ReleaseSchema{}.Decode(
-		c.Config.Account.Id,
-		c.Config.Registry.Id,
-		c.Config.Registry.Region,
-		release.Config.Labels,
+	mfst := manifest.New()
+	deploytime, err := mfst.Decode(
+		manifest.DecodeInput{
+			Labels:       release.Config.Labels,
+			Arch:         release.AWSArchitecture,
+			Uri:          release.Uri,
+			AccountId:    c.Config.Account.Id,
+			TemplateData: c.Config.TemplateData,
+		},
 	)
 
 	if err != nil {
 		return []Subscription{}, err
 	}
 
-	for _, bus := range deploytime.Bus {
+	for _, bus := range deploytime.Bus.Content {
 		// TODO: refactor majority of this string munging into DeployTime.Computed
 
 		// drop the prefix
-		parts := strings.Replace(bus.Key, config.LabelKeys.Bus, "", 1)
+		parts := strings.Replace(bus.Key, deploytime.Bus.KeyPrefix, "", 1)
 		// split remainder on dot
 		parts = strings.TrimPrefix(parts, ".")
 
@@ -280,7 +285,7 @@ func (c Convention) listDefined(ctx context.Context, d deployment.Deployment) ([
 				},
 			},
 			Meta{
-				Expression: bus.Value,
+				Expression: bus.Content,
 			},
 		})
 	}

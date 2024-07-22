@@ -6,9 +6,8 @@ import (
 
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
+	"github.com/linecard/self/pkg/convention/manifest"
 	"github.com/linecard/self/pkg/convention/release"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -16,6 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	dockerTypes "github.com/docker/docker/api/types"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type FunctionService interface {
@@ -95,11 +96,15 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	ctx, span := otel.Tracer("").Start(ctx, "deployment.Deploy")
 	defer span.End()
 
-	deploytime, err := config.ReleaseSchema{}.Decode(
-		c.Config.Account.Id,
-		c.Config.Registry.Id,
-		c.Config.Registry.Region,
-		r.Config.Labels,
+	mfst := manifest.New()
+	deploytime, err := mfst.Decode(
+		manifest.DecodeInput{
+			Labels:       r.Image.Config.Labels,
+			Arch:         r.AWSArchitecture,
+			Uri:          r.Uri,
+			AccountId:    c.Config.Account.Id,
+			TemplateData: c.Config.TemplateData,
+		},
 	)
 
 	if err != nil {
@@ -108,15 +113,16 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	}
 
 	tags := map[string]string{
-		"NameSpace": deploytime.Branch.Value, // TODO: just switch to Branch?
-		"Function":  deploytime.Name.Value,
-		"Sha":       deploytime.Sha.Value,
+		"Function": deploytime.Name.Content,
+		"Origin":   deploytime.Origin.Content,
+		"Branch":   deploytime.Branch.Content,
+		"Sha":      deploytime.Sha.Content,
 	}
 
 	role, err := c.Service.Function.PutRole(
 		ctx,
-		deploytime.Computed.Role.Name,
-		deploytime.Role.Value,
+		deploytime.Computed.Resource.Name,
+		deploytime.Role.Content,
 		tags,
 	)
 
@@ -127,8 +133,8 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 
 	policy, err := c.Service.Function.PutPolicy(
 		ctx,
-		deploytime.Computed.Policy.Arn,
-		deploytime.Policy.Value,
+		deploytime.Computed.Resource.Policy.Arn,
+		deploytime.Policy.Content,
 		tags,
 	)
 
