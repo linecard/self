@@ -7,6 +7,7 @@ import (
 
 	"github.com/linecard/self/cmd/cli/param"
 	"github.com/linecard/self/pkg/convention/config"
+	"github.com/linecard/self/pkg/convention/manifest"
 	"github.com/linecard/self/pkg/sdk"
 
 	"github.com/charmbracelet/lipgloss/table"
@@ -20,30 +21,20 @@ func InitFunction(ctx context.Context, api sdk.API, p *param.Init) {
 }
 
 func BuildRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.Build) {
-	schema, err := cfg.Find(p.FunctionArg.Path)
+	buildtime, computed, err := cfg.Find(p.FunctionArg.Path)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to find release schema")
+		log.Fatal().Err(err).Msgf("failed lookup for %s", p.FunctionArg.Path)
 	}
 
-	buildtime, err := schema.Encode(cfg)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to encode buildtime schema")
-	}
-
-	if _, err := api.Release.Build(ctx, buildtime); err != nil {
+	if _, err := api.Release.Build(ctx, buildtime, computed); err != nil {
 		log.Fatal().Err(err).Msg("failed to build release")
 	}
 }
 
 func PublishRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.Release) {
-	schema, err := cfg.Find(p.FunctionArg.Path)
+	buildtime, computed, err := cfg.Find(p.FunctionArg.Path)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to find release schema")
-	}
-
-	buildtime, err := schema.Encode(cfg)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to encode buildtime schema")
+		log.Fatal().Err(err).Msgf("failed lookup for %s", p.FunctionArg.Path)
 	}
 
 	if p.Login {
@@ -53,12 +44,12 @@ func PublishRelease(ctx context.Context, cfg config.Config, api sdk.API, p *para
 	}
 
 	if p.EnsureRepository {
-		if err := api.Release.EnsureRepository(ctx, buildtime.Computed.Repository.Name); err != nil {
+		if err := api.Release.EnsureRepository(ctx, computed.Repository.Name); err != nil {
 			log.Fatal().Err(err).Msg("failed to ensure ECR repository")
 		}
 	}
 
-	image, err := api.Release.Build(ctx, buildtime)
+	image, err := api.Release.Build(ctx, buildtime, computed)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to build release")
 	}
@@ -69,12 +60,12 @@ func PublishRelease(ctx context.Context, cfg config.Config, api sdk.API, p *para
 }
 
 func DeployRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.Deploy) {
-	schema, err := cfg.Find(p.FunctionArg.Path)
+	_, computed, err := cfg.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
 
-	release, err := api.Release.Find(ctx, schema.Computed.Repository.Name, p.Branch)
+	release, err := api.Release.Find(ctx, computed.Repository.Path, p.Branch)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release")
 	}
@@ -94,12 +85,12 @@ func DeployRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param
 }
 
 func DestroyDeployment(ctx context.Context, cfg config.Config, api sdk.API, p *param.Destroy) {
-	schema, err := cfg.Find(p.FunctionArg.Path)
+	_, computed, err := cfg.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
 
-	deployment, err := api.Deployment.Find(ctx, schema.Computed.Resource.Name)
+	deployment, err := api.Deployment.Find(ctx, computed.Resource.Name)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find deployment")
 	}
@@ -120,12 +111,12 @@ func DestroyDeployment(ctx context.Context, cfg config.Config, api sdk.API, p *p
 func ListReleases(ctx context.Context, cfg config.Config, api sdk.API, p *param.Releases) {
 	t := table.New()
 
-	schema, err := cfg.Find(p.FunctionArg.Path)
+	_, computed, err := cfg.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
 
-	releases, err := api.Release.List(ctx, schema.Computed.Repository.Name)
+	releases, err := api.Release.List(ctx, computed.Repository.Name)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to list releases")
 	}
@@ -141,12 +132,12 @@ func ListReleases(ctx context.Context, cfg config.Config, api sdk.API, p *param.
 func ListDeployments(ctx context.Context, cfg config.Config, api sdk.API, p *param.Deployments) {
 	t := table.New()
 
-	schema, err := cfg.Find(p.FunctionArg.Path)
+	_, computed, err := cfg.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
 
-	deployments, err := api.Deployment.List(ctx, schema.Computed.Resource.Prefix)
+	deployments, err := api.Deployment.List(ctx, computed.Resource.Prefix)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to list deployments")
 	}
@@ -161,28 +152,21 @@ func ListDeployments(ctx context.Context, cfg config.Config, api sdk.API, p *par
 }
 
 func InspectRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.Inspect) {
-	schema, err := cfg.Find(p.FunctionArg.Path)
+	_, computed, err := cfg.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
 
-	release, err := api.Release.Find(ctx, schema.Computed.Repository.Name, p.Branch)
+	release, err := api.Release.Find(ctx, computed.Repository.Name, p.Branch)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release")
 	}
 
-	deploytime, err := schema.Decode(
-		cfg.Account.Id,
-		cfg.Registry.Id,
-		cfg.Registry.Region,
-		release.Config.Labels,
-		release.AWSArchitecture,
-		release.Uri,
-	)
-
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to decode deploytime schema")
 	}
+
+	deploytime, err := manifest.Decode(release.Config.Labels, release.Uri)
 
 	dJson, err := json.Marshal(deploytime)
 	if err != nil {

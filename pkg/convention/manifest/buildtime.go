@@ -12,49 +12,50 @@ type BuildTime struct {
 	Context string
 }
 
-func (r *Release) Encode(path string, git gitlib.DotGit) (b BuildTime, err error) {
+func Encode(path string, git gitlib.DotGit) (b BuildTime, err error) {
+	s := Init()
 	name := filepath.Base(path)
 
-	if err = r.Schema.Encode(schemaVersion); err != nil {
+	if err = s.Schema.Encode(schemaVersion); err != nil {
 		return b, err
 	}
 
-	if err = r.Name.Encode(name); err != nil {
+	if err = s.Name.Encode(name); err != nil {
 		return b, err
 	}
 
-	if err = r.Branch.Encode(git.Branch); err != nil {
+	if err = s.Branch.Encode(git.Branch); err != nil {
 		return b, err
 	}
 
-	if err = r.Sha.Encode(git.Sha); err != nil {
+	if err = s.Sha.Encode(git.Sha); err != nil {
 		return b, err
 	}
 
-	if err = r.Origin.Encode(git.Origin.String()); err != nil {
+	if err = s.Origin.Encode(git.Origin.String()); err != nil {
 		return b, err
 	}
 
-	if err = r.Role.Encode("roles/lambda.json.tmpl"); err != nil {
+	if err = s.Role.Encode("roles/lambda.json.tmpl"); err != nil {
 		return b, err
 	}
 
-	if err = r.Policy.Encode(filepath.Join(path, "policy.json.tmpl")); err != nil {
+	if err = s.Policy.Encode(filepath.Join(path, "policy.json.tmpl")); err != nil {
 		return b, err
 	}
 
-	if err = r.Resources.Encode(filepath.Join(path, "resources.json.tmpl")); err != nil {
+	if err = s.Resources.Encode(filepath.Join(path, "resources.json.tmpl")); err != nil {
 		return b, err
 	}
 
-	if err = r.Bus.Encode(filepath.Join(path, "bus")); err != nil {
+	if err = s.Bus.Encode(filepath.Join(path, "bus")); err != nil {
 		return b, err
 	}
 
 	return BuildTime{
 		Path:    path,
-		Context: git.Root,
-		Release: *r,
+		Context: path,
+		Release: s,
 	}, nil
 }
 

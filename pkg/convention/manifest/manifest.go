@@ -23,7 +23,7 @@ type Release struct {
 	Bus       FolderLabel
 }
 
-func New() Release {
+func Init() Release {
 	return Release{
 		Schema: StringLabel{
 			Description: "Manifest schema version string",

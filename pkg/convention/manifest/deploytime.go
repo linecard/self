@@ -4,16 +4,18 @@ type DeployTime struct {
 	Release
 }
 
-func (r *Release) Decode(labels map[string]string, templateData any) (d DeployTime, err error) {
-	if d, err = r.decode(labels); err != nil {
-		return d, err
+func Decode(labels map[string]string, templateData any) (d DeployTime, err error) {
+	s := Init()
+
+	if d, err = s.decode(labels); err != nil {
+		return
 	}
 
 	if err = d.template(templateData); err != nil {
-		return d, err
+		return
 	}
 
-	return d, nil
+	return
 }
 
 func (r *Release) decode(labels map[string]string) (d DeployTime, err error) {

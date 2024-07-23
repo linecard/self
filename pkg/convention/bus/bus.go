@@ -7,7 +7,6 @@ import (
 
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/deployment"
-	"github.com/linecard/self/pkg/convention/manifest"
 	"github.com/linecard/self/pkg/service/event"
 	"github.com/rs/zerolog/log"
 
@@ -241,17 +240,7 @@ func (c Convention) listDefined(ctx context.Context, d deployment.Deployment) ([
 		return []Subscription{}, err
 	}
 
-	mfst := manifest.New()
-	deploytime, err := mfst.Decode(
-		manifest.DecodeInput{
-			Labels:       release.Config.Labels,
-			Arch:         release.AWSArchitecture,
-			Uri:          release.Uri,
-			AccountId:    c.Config.Account.Id,
-			TemplateData: c.Config.TemplateData,
-		},
-	)
-
+	deploytime, _, err := c.Config.Parse(release.Config.Labels)
 	if err != nil {
 		return []Subscription{}, err
 	}

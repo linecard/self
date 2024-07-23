@@ -5,12 +5,11 @@ import (
 	"embed"
 	"fmt"
 
-	"github.com/linecard/self/pkg/convention/manifest"
-
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/linecard/self/internal/gitlib"
 	"github.com/linecard/self/internal/util"
+	"github.com/linecard/self/pkg/convention/manifest"
 )
 
 const (
@@ -64,51 +63,69 @@ type TemplateData struct {
 	RegistryAccountId string
 }
 
-type Config struct {
-	BuildManifests []manifest.BuildTime
-	Caller         Caller
-	Account        Account
-	Git            gitlib.DotGit
-	Registry       Registry
-	ApiGateway     ApiGateway
-	Vpc            Vpc
-	TemplateData   TemplateData
-	Version        string
+type Selfish struct {
+	Path string
+	Name string
 }
 
-func (c *Config) Find(manifestName string) (manifest.BuildTime, error) {
-	for _, m := range c.BuildManifests {
-		if m.Name.Content == manifestName {
-			return m, nil
+type Config struct {
+	Selfish      []Selfish
+	Caller       Caller
+	Account      Account
+	Git          gitlib.DotGit
+	Registry     Registry
+	ApiGateway   ApiGateway
+	Vpc          Vpc
+	TemplateData TemplateData
+	Version      string
+}
+
+func (c Config) Find(path string) (buildtime manifest.BuildTime, computed Computed, err error) {
+	for _, s := range c.Selfish {
+		if s.Path == path {
+			if buildtime, err = manifest.Encode(path, c.Git); err != nil {
+				return
+			}
+
+			return c.SolveBuildTime(buildtime)
 		}
 	}
 
-	return manifest.BuildTime{}, fmt.Errorf("manifest not found for %s", manifestName)
+	return buildtime, computed, fmt.Errorf("%s does not appear to be selfish", path)
+}
+
+func (c Config) Parse(labels map[string]string) (deploytime manifest.DeployTime, computed Computed, err error) {
+	deploytime, err = manifest.Decode(labels, c.TemplateData)
+	if err != nil {
+		return
+	}
+
+	return c.SolveDeployTime(deploytime)
 }
 
 func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClient, stsc STSClient) (err error) {
-	if err := c.DiscoverGit(ctx); err != nil {
-		return err
+	if err = c.DiscoverGit(ctx); err != nil {
+		return
 	}
 
-	if err := c.DiscoverCaller(ctx, stsc, awsConfig); err != nil {
-		return err
+	if err = c.DiscoverCaller(ctx, stsc, awsConfig); err != nil {
+		return
 	}
 
-	if err := c.DiscoverRegistry(ctx, envEcrId, envEcrRegion, ecrc, awsConfig); err != nil {
-		return err
+	if err = c.DiscoverRegistry(ctx, envEcrId, envEcrRegion, ecrc, awsConfig); err != nil {
+		return
 	}
 
-	if err := c.DiscoverGateway(ctx, envGwId); err != nil {
-		return err
+	if err = c.DiscoverGateway(ctx, envGwId); err != nil {
+		return
 	}
 
-	if err := c.DiscoverVpc(ctx, envSgIds, envSnIds); err != nil {
-		return err
+	if err = c.DiscoverVpc(ctx, envSgIds, envSnIds); err != nil {
+		return
 	}
 
-	if err := c.DiscoverFunctions(ctx); err != nil {
-		return err
+	if err = c.DiscoverSelfish(ctx); err != nil {
+		return
 	}
 
 	c.TemplateData = TemplateData{
@@ -118,24 +135,24 @@ func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClie
 		RegistryAccountId: c.Registry.Id,
 	}
 
-	return nil
+	return
 }
 
 func (c *Config) FromEvent(ctx context.Context, awsConfig aws.Config, ecrc ECRClient, stsc STSClient, event events.ECRImageActionEvent) (err error) {
-	if err := c.DiscoverCaller(ctx, stsc, awsConfig); err != nil {
-		return err
+	if err = c.DiscoverCaller(ctx, stsc, awsConfig); err != nil {
+		return
 	}
 
-	if err := c.DiscoverRegistry(ctx, envEcrId, envEcrRegion, ecrc, awsConfig); err != nil {
-		return err
+	if err = c.DiscoverRegistry(ctx, envEcrId, envEcrRegion, ecrc, awsConfig); err != nil {
+		return
 	}
 
-	if err := c.DiscoverGateway(ctx, envGwId); err != nil {
-		return err
+	if err = c.DiscoverGateway(ctx, envGwId); err != nil {
+		return
 	}
 
-	if err := c.DiscoverVpc(ctx, envSgIds, envSnIds); err != nil {
-		return err
+	if err = c.DiscoverVpc(ctx, envSgIds, envSnIds); err != nil {
+		return
 	}
 
 	if util.ShaLike(event.Detail.ImageTag) {
@@ -151,5 +168,5 @@ func (c *Config) FromEvent(ctx context.Context, awsConfig aws.Config, ecrc ECRCl
 		RegistryAccountId: c.Registry.Id,
 	}
 
-	return nil
+	return
 }

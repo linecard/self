@@ -76,13 +76,15 @@ func (c Convention) Find(ctx context.Context, repositoryPath, tag string) (Relea
 	defer span.End()
 
 	inspect, err := c.Service.Registry.InspectByTag(ctx, c.Config.Registry.Id, repositoryPath, tag)
-
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err
 	}
 
-	uri, err := c.Service.Registry.ImageUri(ctx, c.Config.Registry.Id, c.Config.Registry.Url, repositoryPath, tag)
+	registry := config.ComputedRegistry{}
+	registry.Solve(c.Config.Registry.Region, c.Config.Registry.Id)
+
+	uri, err := c.Service.Registry.ImageUri(ctx, c.Config.Registry.Id, registry.Url, repositoryPath, tag)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err
@@ -134,14 +136,14 @@ func (c Convention) List(ctx context.Context, repositoryName string) ([]ReleaseS
 	return releases, nil
 }
 
-func (c Convention) Build(ctx context.Context, buildtime manifest.Release) (Image, error) {
-	tags := []string{
+func (c Convention) Build(ctx context.Context, buildtime manifest.BuildTime, computed config.Computed) (Image, error) {
+	tags := []string{ // make this a part of computed.
 		fmt.Sprintf("%s:%s",
-			buildtime.Computed.Repository.Url,
+			computed.Repository.Url,
 			buildtime.Branch.Raw,
 		),
 		fmt.Sprintf("%s:%s",
-			buildtime.Computed.Repository.Url,
+			computed.Repository.Url,
 			buildtime.Sha.Raw,
 		),
 	}
@@ -160,8 +162,8 @@ func (c Convention) Build(ctx context.Context, buildtime manifest.Release) (Imag
 
 	inspect, err := c.Service.Build.InspectByTag(
 		ctx,
-		buildtime.Computed.Registry.Url,
-		buildtime.Computed.Repository.Path,
+		computed.Registry.Url,
+		computed.Repository.Path,
 		buildtime.Sha.Raw,
 	)
 

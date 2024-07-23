@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/linecard/self/internal/gitlib"
-	"github.com/linecard/self/pkg/convention/manifest"
 )
 
 type STSClient interface {
@@ -57,7 +56,9 @@ func (c *Config) DiscoverRegistry(ctx context.Context, ecrEnvar, regionEnvar str
 		c.Registry.Id = *res.RegistryId
 	}
 
-	c.Registry.Url = c.Registry.Id + ".dkr.ecr." + c.Registry.Region + ".amazonaws.com"
+	computed := ComputedRegistry{}
+	computed.Solve(c.Registry.Region, c.Registry.Id)
+	c.Registry.Url = computed.Url
 
 	return nil
 }
@@ -98,7 +99,7 @@ func (c *Config) DiscoverGit(ctx context.Context) (err error) {
 	return err
 }
 
-func (c *Config) DiscoverFunctions(ctx context.Context) (err error) {
+func (c *Config) DiscoverSelfish(ctx context.Context) (err error) {
 	selfish := func(path string) bool {
 		signature := []string{"policy.json.tmpl", "Dockerfile"}
 
@@ -118,16 +119,15 @@ func (c *Config) DiscoverFunctions(ctx context.Context) (err error) {
 		}
 
 		if info.IsDir() && selfish(path) {
-			var mfst manifest.Release
-			var bt manifest.BuildTime
-
-			mfst = manifest.New()
-
-			if bt, err = mfst.Encode(path, c.Git); err != nil {
+			abs, err := filepath.Abs(path)
+			if err != nil {
 				return err
 			}
 
-			c.BuildManifests = append(c.BuildManifests, bt)
+			c.Selfish = append(c.Selfish, Selfish{
+				Path: abs,
+				Name: filepath.Base(abs),
+			})
 		}
 
 		return nil

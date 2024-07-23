@@ -6,7 +6,6 @@ import (
 
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
-	"github.com/linecard/self/pkg/convention/manifest"
 	"github.com/linecard/self/pkg/convention/release"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -96,17 +95,7 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	ctx, span := otel.Tracer("").Start(ctx, "deployment.Deploy")
 	defer span.End()
 
-	mfst := manifest.New()
-	deploytime, err := mfst.Decode(
-		manifest.DecodeInput{
-			Labels:       r.Image.Config.Labels,
-			Arch:         r.AWSArchitecture,
-			Uri:          r.Uri,
-			AccountId:    c.Config.Account.Id,
-			TemplateData: c.Config.TemplateData,
-		},
-	)
-
+	deploytime, computed, err := c.Config.Parse(r.Config.Labels)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
@@ -121,7 +110,7 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 
 	role, err := c.Service.Function.PutRole(
 		ctx,
-		deploytime.Computed.Resource.Name,
+		computed.Resource.Name,
 		deploytime.Role.Content,
 		tags,
 	)
@@ -133,7 +122,7 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 
 	policy, err := c.Service.Function.PutPolicy(
 		ctx,
-		deploytime.Computed.Resource.Policy.Arn,
+		computed.Resource.Policy.Arn,
 		deploytime.Policy.Content,
 		tags,
 	)
@@ -156,19 +145,19 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 
 	// create function parameters
 	input := &lambda.CreateFunctionInput{
-		FunctionName:  aws.String(deploytime.Computed.Resource.Name),
+		FunctionName:  aws.String(computed.Resource.Name),
 		Role:          role.Role.Arn,
 		Tags:          tags,
 		Architectures: r.AWSArchitecture,
 		PackageType:   types.PackageTypeImage,
-		Timeout:       &deploytime.Computed.Resources.Timeout,
-		MemorySize:    &deploytime.Computed.Resources.MemorySize,
+		Timeout:       &computed.Resources.Timeout,
+		MemorySize:    &computed.Resources.MemorySize,
 		VpcConfig: &types.VpcConfig{
 			SecurityGroupIds: c.Config.Vpc.SecurityGroupIds,
 			SubnetIds:        c.Config.Vpc.SubnetIds,
 		},
 		EphemeralStorage: &types.EphemeralStorage{
-			Size: &deploytime.Computed.Resources.EphemeralStorage,
+			Size: &computed.Resources.EphemeralStorage,
 		},
 		Code: &types.FunctionCode{
 			ImageUri: aws.String(r.Uri),
@@ -197,7 +186,7 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 
 		// After creating the function with this ENI garbage collection role, we can go ahead and attach the role we actually want.
 		_, err = c.Service.Function.PatchFunction(ctx, &lambda.UpdateFunctionConfigurationInput{
-			FunctionName: aws.String(deploytime.Computed.Resource.Name),
+			FunctionName: aws.String(computed.Resource.Name),
 			Role:         role.Role.Arn,
 		})
 
@@ -206,7 +195,7 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 			return Deployment{}, err
 		}
 
-		return c.Find(ctx, deploytime.Computed.Resource.Name)
+		return c.Find(ctx, computed.Resource.Name)
 	}
 
 	// Does not have VPC config
@@ -214,7 +203,7 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
-	return c.Find(ctx, deploytime.Computed.Resource.Name)
+	return c.Find(ctx, computed.Resource.Name)
 }
 
 func (c Convention) Destroy(ctx context.Context, d Deployment) error {

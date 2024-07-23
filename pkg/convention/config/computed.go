@@ -11,14 +11,20 @@ import (
 	"github.com/linecard/self/pkg/convention/manifest"
 )
 
-type Repository struct {
+type ComputedRegistry struct {
+	AccountId string
+	Region    string
+	Url       string
+}
+
+type ComputedRepository struct {
 	Prefix string
 	Name   string
 	Path   string
 	Url    string
 }
 
-type Resource struct {
+type ComputedResource struct {
 	Prefix string
 	Name   string
 	Policy struct {
@@ -29,7 +35,7 @@ type Resource struct {
 	}
 }
 
-type Resources struct {
+type ComputedResources struct {
 	EphemeralStorage int32  `json:"ephemeralStorage"`
 	MemorySize       int32  `json:"memorySize"`
 	Timeout          int32  `json:"timeout"`
@@ -38,66 +44,72 @@ type Resources struct {
 	RouteKey         string `json:"routeKey"`
 }
 
-type BuildTimeDerivation struct {
-	Registry   Registry
-	Repository Repository
+type Computed struct {
+	Registry   ComputedRegistry
+	Repository ComputedRepository
+	Resource   ComputedResource
+	Resources  ComputedResources
 }
 
-type DeployTimeDerivation struct {
-	Registry   Registry
-	Repository Repository
-	Resource   Resource
-	Resources  Resources
+func (c Config) SolveBuildTime(buildtime manifest.BuildTime) (m manifest.BuildTime, derived Computed, err error) {
+	derived.Registry.Solve(c.Account.Id, c.Account.Region)
+	derived.Repository.Solve(derived.Registry, c.Git, buildtime.Name.Content)
+	derived.Resource.Solve(c.Account.Id, derived.Repository, c.Git, buildtime.Name.Content)
+	derived.Resources.Solve(buildtime.Resources.Content, derived.Repository, c.Git, buildtime.Name.Content)
+	return buildtime, derived, nil
 }
 
-func (c Config) DeriveBuildTime(mfst *manifest.BuildTime) (d BuildTimeDerivation, err error) {
-	d.Registry.Url = c.Registry.Url
-	d.Repository.Prefix = strings.TrimSuffix(c.Git.Origin.Path, ".git")
-	d.Repository.Name = strings.TrimPrefix(d.Repository.Prefix, "/") + "/" + mfst.Name.Raw
-	d.Repository.Path = filepath.Clean(d.Repository.Prefix + "/" + mfst.Name.Raw)
-	d.Repository.Url = d.Registry.Url + d.Repository.Path
-	return d, nil
-}
-
-func (c Config) DeriveDeployTime(mfst *manifest.DeployTime, imageUri string) (d DeployTimeDerivation, err error) {
-	origin, err := url.Parse(mfst.Origin.Content)
+func (c Config) SolveDeployTime(deploytime manifest.DeployTime) (m manifest.DeployTime, derived Computed, err error) {
+	origin, err := url.Parse(deploytime.Origin.Content)
 	if err != nil {
-		return d, err
+		return
 	}
 
 	git := gitlib.DotGit{
-		Branch: mfst.Branch.Content,
-		Sha:    mfst.Sha.Content,
+		Branch: deploytime.Branch.Content,
 		Origin: origin,
 	}
 
-	d.Registry.Url = strings.Split(imageUri, "@")[0]
-	d.Repository.Prefix = strings.TrimSuffix(git.Origin.Path, ".git")
-	d.Repository.Name = strings.TrimPrefix(d.Repository.Prefix, "/") + "/" + mfst.Name.Content
-	d.Repository.Path = filepath.Clean(d.Repository.Prefix + "/" + mfst.Name.Content)
-	d.Repository.Url = d.Registry.Url + d.Repository.Path
-	d.Resource.Prefix = util.DeSlasher(d.Repository.Prefix) + "-" + util.DeSlasher(mfst.Branch.Content)
-	d.Resource.Name = d.Resource.Prefix + "-" + mfst.Name.Content
-	d.Resource.Policy.Arn = "arn:aws:iam::" + c.Account.Id + ":policy/" + d.Resource.Name
-	d.Resource.Role.Arn = "arn:aws:iam::" + c.Account.Id + ":role/" + d.Resource.Name
+	derived.Registry.Solve(c.Account.Id, c.Account.Region)
+	derived.Repository.Solve(derived.Registry, git, deploytime.Name.Content)
+	derived.Resource.Solve(c.Account.Id, derived.Repository, git, deploytime.Name.Content)
+	derived.Resources.Solve(deploytime.Resources.Content, derived.Repository, git, deploytime.Name.Content)
+	return
+}
 
-	// merge defaults with given.
-	resources := Resources{
+func (registry *ComputedRegistry) Solve(registryId string, registryRegion string) {
+	registry.Url = registryId + ".dkr.ecr." + registryRegion + ".amazonaws.com"
+}
+
+func (repository *ComputedRepository) Solve(registry ComputedRegistry, git gitlib.DotGit, name string) {
+	repository.Prefix = strings.TrimSuffix(git.Origin.Path, ".git")
+	repository.Path = filepath.Clean(repository.Prefix + "/" + name)
+	repository.Name = repository.Path + "/" + name
+	repository.Url = registry.Url + "/" + repository.Path
+}
+
+func (resource *ComputedResource) Solve(accountId string, repository ComputedRepository, git gitlib.DotGit, name string) {
+	resource.Prefix = util.DeSlasher(repository.Prefix) + "-" + util.DeSlasher(git.Branch)
+	resource.Name = resource.Prefix + "-" + name
+	resource.Policy.Arn = "arn:aws:iam::" + accountId + ":policy/" + resource.Name
+	resource.Role.Arn = "arn:aws:iam::" + accountId + ":role/" + resource.Name
+}
+
+func (resources *ComputedResources) Solve(resourcesJson string, repository ComputedRepository, git gitlib.DotGit, name string) {
+	defaults := ComputedResources{
 		EphemeralStorage: 512,
 		MemorySize:       128,
 		Timeout:          3,
 		Http:             true,
 		Public:           false,
-		RouteKey:         "ANY /" + d.Repository.Prefix + "/" + git.Branch + "/" + mfst.Name.Content,
+		RouteKey:         "ANY /" + repository.Prefix + "/" + git.Branch + "/" + name,
 	}
 
-	if mfst.Resources.Content != "" {
-		if err = json.Unmarshal([]byte(mfst.Resources.Content), &resources); err != nil {
-			d.Resources = resources
+	if resourcesJson != "" {
+		if err := json.Unmarshal([]byte(resourcesJson), &resources); err != nil {
+			resources = &defaults
 		}
 	} else {
-		d.Resources = resources
+		resources = &defaults
 	}
-
-	return d, nil
 }
