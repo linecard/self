@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	shortRetry = 5
-	stdRetry   = 10
-	longRetry  = 15
+	shortRetry = 3
+	stdRetry   = 3
+	longRetry  = 3
 )
 
 func (s Service) List(ctx context.Context, prefix string) ([]lambda.GetFunctionOutput, error) {

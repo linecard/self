@@ -141,10 +141,16 @@ func ListDeployments(ctx context.Context, cfg config.Config, api sdk.API, p *par
 		log.Fatal().Err(err).Msg("failed to list deployments")
 	}
 
-	t.Headers("HEAD", "SHA", "DIGEST", "RELEASED")
+	t.Headers("HEAD", "SHA", "DIGEST", "DEPLOYED")
 
 	for _, deployment := range deployments {
-		t.Row(deployment.Tags["branch"], deployment.Tags["sha"], deployment.Tags["digest"], deployment.Tags["released"])
+		fmt.Println(deployment.Tags)
+		t.Row(
+			deployment.Tags["Branch"],
+			deployment.Tags["Sha"],
+			"sha256:"+*deployment.Configuration.CodeSha256,
+			*deployment.Configuration.LastModified,
+		)
 	}
 
 	fmt.Println(t.Render())

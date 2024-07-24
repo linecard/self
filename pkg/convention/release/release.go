@@ -81,10 +81,7 @@ func (c Convention) Find(ctx context.Context, repositoryName, tag string) (Relea
 		return Release{}, err
 	}
 
-	registry := config.ComputedRegistry{}
-	registry.Solve(c.Config.Registry.Region, c.Config.Registry.Id)
-
-	uri, err := c.Service.Registry.ImageUri(ctx, c.Config.Registry.Id, registry.Url, repositoryName, tag)
+	uri, err := c.Service.Registry.ImageUri(ctx, c.Config.Registry.Id, c.Config.Registry.Url, repositoryName, tag)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err

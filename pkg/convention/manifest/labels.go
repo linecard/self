@@ -137,8 +137,8 @@ func (f *EmbeddedFileLabel) Decode(labels map[string]string) error {
 				return err
 			}
 
-			f.Decoded = v
-			f.Encoded = string(decoded)
+			f.Encoded = v
+			f.Decoded = string(decoded)
 			return nil
 		}
 	}
