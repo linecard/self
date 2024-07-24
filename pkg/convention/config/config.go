@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"path/filepath"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -80,10 +81,15 @@ type Config struct {
 	Version      string
 }
 
-func (c Config) Find(path string) (buildtime manifest.BuildTime, computed Computed, err error) {
+func (c Config) Find(buildPath string) (buildtime manifest.BuildTime, computed Computed, err error) {
+	absPath, err := filepath.Abs(buildPath)
+	if err != nil {
+		return
+	}
+
 	for _, s := range c.Selfish {
-		if s.Path == path {
-			if buildtime, err = manifest.Encode(path, c.Git); err != nil {
+		if s.Path == absPath {
+			if buildtime, err = manifest.Encode(absPath, c.Git); err != nil {
 				return
 			}
 
@@ -91,7 +97,7 @@ func (c Config) Find(path string) (buildtime manifest.BuildTime, computed Comput
 		}
 	}
 
-	return buildtime, computed, fmt.Errorf("%s does not appear to be selfish", path)
+	return buildtime, computed, fmt.Errorf("%s does not appear to be selfish", absPath)
 }
 
 func (c Config) Parse(labels map[string]string) (deploytime manifest.DeployTime, computed Computed, err error) {

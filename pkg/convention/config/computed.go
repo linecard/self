@@ -12,22 +12,19 @@ import (
 )
 
 type ComputedRegistry struct {
-	AccountId string
-	Region    string
-	Url       string
+	Url string
 }
 
 type ComputedRepository struct {
-	Prefix string
-	Name   string
-	Path   string
-	Url    string
+	Namespace string
+	Name      string
+	Url       string
 }
 
 type ComputedResource struct {
-	Prefix string
-	Name   string
-	Policy struct {
+	Namespace string
+	Name      string
+	Policy    struct {
 		Arn string
 	}
 	Role struct {
@@ -51,30 +48,35 @@ type Computed struct {
 	Resources  ComputedResources
 }
 
+func (c Computed) Json() (string, error) {
+	b, err := json.Marshal(c)
+	return string(b), err
+}
+
 func (c Config) SolveBuildTime(buildtime manifest.BuildTime) (m manifest.BuildTime, derived Computed, err error) {
 	derived.Registry.Solve(c.Account.Id, c.Account.Region)
-	derived.Repository.Solve(derived.Registry, c.Git, buildtime.Name.Content)
-	derived.Resource.Solve(c.Account.Id, derived.Repository, c.Git, buildtime.Name.Content)
-	derived.Resources.Solve(buildtime.Resources.Content, derived.Repository, c.Git, buildtime.Name.Content)
+	derived.Repository.Solve(derived.Registry, c.Git, buildtime.Name.Decoded)
+	derived.Resource.Solve(c.Account.Id, derived.Repository, c.Git, buildtime.Name.Decoded)
+	derived.Resources.Solve(buildtime.Resources.Decoded, derived.Repository, c.Git, buildtime.Name.Decoded)
 	return buildtime, derived, nil
 }
 
 func (c Config) SolveDeployTime(deploytime manifest.DeployTime) (m manifest.DeployTime, derived Computed, err error) {
-	origin, err := url.Parse(deploytime.Origin.Content)
+	origin, err := url.Parse(deploytime.Origin.Decoded)
 	if err != nil {
 		return
 	}
 
 	git := gitlib.DotGit{
-		Branch: deploytime.Branch.Content,
+		Branch: deploytime.Branch.Decoded,
 		Origin: origin,
 	}
 
 	derived.Registry.Solve(c.Account.Id, c.Account.Region)
-	derived.Repository.Solve(derived.Registry, git, deploytime.Name.Content)
-	derived.Resource.Solve(c.Account.Id, derived.Repository, git, deploytime.Name.Content)
-	derived.Resources.Solve(deploytime.Resources.Content, derived.Repository, git, deploytime.Name.Content)
-	return
+	derived.Repository.Solve(derived.Registry, git, deploytime.Name.Decoded)
+	derived.Resource.Solve(c.Account.Id, derived.Repository, git, deploytime.Name.Decoded)
+	derived.Resources.Solve(deploytime.Resources.Decoded, derived.Repository, git, deploytime.Name.Decoded)
+	return deploytime, derived, nil
 }
 
 func (registry *ComputedRegistry) Solve(registryId string, registryRegion string) {
@@ -82,15 +84,15 @@ func (registry *ComputedRegistry) Solve(registryId string, registryRegion string
 }
 
 func (repository *ComputedRepository) Solve(registry ComputedRegistry, git gitlib.DotGit, name string) {
-	repository.Prefix = strings.TrimSuffix(git.Origin.Path, ".git")
-	repository.Path = filepath.Clean(repository.Prefix + "/" + name)
-	repository.Name = repository.Path + "/" + name
-	repository.Url = registry.Url + "/" + repository.Path
+	nameSpace := strings.TrimSuffix(git.Origin.Path, ".git")
+	repository.Namespace = strings.TrimPrefix(nameSpace, "/")
+	repository.Name = filepath.Clean(repository.Namespace + "/" + name)
+	repository.Url = registry.Url + "/" + repository.Name
 }
 
 func (resource *ComputedResource) Solve(accountId string, repository ComputedRepository, git gitlib.DotGit, name string) {
-	resource.Prefix = util.DeSlasher(repository.Prefix) + "-" + util.DeSlasher(git.Branch)
-	resource.Name = resource.Prefix + "-" + name
+	resource.Namespace = util.DeSlasher(repository.Namespace) + "-" + git.Branch
+	resource.Name = resource.Namespace + "-" + name
 	resource.Policy.Arn = "arn:aws:iam::" + accountId + ":policy/" + resource.Name
 	resource.Role.Arn = "arn:aws:iam::" + accountId + ":role/" + resource.Name
 }
@@ -102,14 +104,40 @@ func (resources *ComputedResources) Solve(resourcesJson string, repository Compu
 		Timeout:          3,
 		Http:             true,
 		Public:           false,
-		RouteKey:         "ANY /" + repository.Prefix + "/" + git.Branch + "/" + name,
+		RouteKey:         "ANY /" + repository.Namespace + "/" + git.Branch + "/" + name,
 	}
 
+	// Start with the default values
+	*resources = defaults
+
 	if resourcesJson != "" {
-		if err := json.Unmarshal([]byte(resourcesJson), &resources); err != nil {
-			resources = &defaults
+		// Unmarshal into a temporary struct
+		var temp ComputedResources
+		if err := json.Unmarshal([]byte(resourcesJson), &temp); err == nil {
+			// If unmarshaling succeeds, update only the non-zero values
+			if temp.EphemeralStorage != 0 {
+				resources.EphemeralStorage = temp.EphemeralStorage
+			}
+			if temp.MemorySize != 0 {
+				resources.MemorySize = temp.MemorySize
+			}
+			if temp.Timeout != 0 {
+				resources.Timeout = temp.Timeout
+			}
+			// For boolean fields, we need to check if they were explicitly set in the JSON
+			if resourcesJson != "" {
+				var jsonMap map[string]interface{}
+				json.Unmarshal([]byte(resourcesJson), &jsonMap)
+				if _, ok := jsonMap["http"]; ok {
+					resources.Http = temp.Http
+				}
+				if _, ok := jsonMap["public"]; ok {
+					resources.Public = temp.Public
+				}
+			}
+			if temp.RouteKey != "" {
+				resources.RouteKey = temp.RouteKey
+			}
 		}
-	} else {
-		resources = &defaults
 	}
 }

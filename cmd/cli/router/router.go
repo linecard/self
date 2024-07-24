@@ -15,13 +15,12 @@ import (
 type Root struct {
 	Init        *param.Init        `arg:"subcommand:init" help:"Initialize a new function"`
 	Build       *param.Build       `arg:"subcommand:build" help:"Build a function"`
-	Release     *param.Release     `arg:"subcommand:release" help:"Publish a release"`
+	Publish     *param.Publish     `arg:"subcommand:publish" help:"Publish a release"`
 	Releases    *param.Releases    `arg:"subcommand:releases" help:"List releases"`
 	Deploy      *param.Deploy      `arg:"subcommand:deploy" help:"Deploy a release"`
 	Deployments *param.Deployments `arg:"subcommand:deployments" help:"List release deployments"`
 	Destroy     *param.Destroy     `arg:"subcommand:destroy" help:"Destroy a release deployment"`
-	Inspect     *param.Inspect     `arg:"subcommand:inspect" help:"Inspect a release"`
-	Config      *param.Config      `arg:"subcommand:config" help:"Print configuration"`
+	Inspect     *param.Inspect     `arg:"subcommand:inspect" help:"Inspect config"`
 }
 
 func (c Root) Handle(ctx context.Context, cfg config.Config, api sdk.API) {
@@ -32,8 +31,8 @@ func (c Root) Handle(ctx context.Context, cfg config.Config, api sdk.API) {
 	case c.Build != nil:
 		method.BuildRelease(ctx, cfg, api, c.Build)
 
-	case c.Release != nil:
-		method.PublishRelease(ctx, cfg, api, c.Release)
+	case c.Publish != nil:
+		method.PublishRelease(ctx, cfg, api, c.Publish)
 
 	case c.Releases != nil:
 		method.ListReleases(ctx, cfg, api, c.Releases)
@@ -48,10 +47,16 @@ func (c Root) Handle(ctx context.Context, cfg config.Config, api sdk.API) {
 		method.DestroyDeployment(ctx, cfg, api, c.Destroy)
 
 	case c.Inspect != nil:
-		method.InspectRelease(ctx, cfg, api, c.Inspect)
+		switch {
+		case c.Inspect.Build != nil:
+			method.PrintBuildTime(ctx, cfg, api, c.Inspect.Build)
 
-	case c.Config != nil:
-		method.PrintConfig(ctx, cfg, api, c.Config)
+		case c.Inspect.Deploy != nil:
+			method.PrintDeployTime(ctx, cfg, api, c.Inspect.Deploy)
+
+		default:
+			arg.MustParse(&c).WriteHelpForSubcommand(os.Stdout, "inspect")
+		}
 
 	default:
 		arg.MustParse(&c).WriteHelp(os.Stdout)

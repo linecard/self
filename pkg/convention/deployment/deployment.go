@@ -102,16 +102,16 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	}
 
 	tags := map[string]string{
-		"Function": deploytime.Name.Content,
-		"Origin":   deploytime.Origin.Content,
-		"Branch":   deploytime.Branch.Content,
-		"Sha":      deploytime.Sha.Content,
+		"Function": deploytime.Name.Decoded,
+		"Origin":   deploytime.Origin.Decoded,
+		"Branch":   deploytime.Branch.Decoded,
+		"Sha":      deploytime.Sha.Decoded,
 	}
 
 	role, err := c.Service.Function.PutRole(
 		ctx,
 		computed.Resource.Name,
-		deploytime.Role.Content,
+		deploytime.Role.Decoded,
 		tags,
 	)
 
@@ -123,7 +123,7 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	policy, err := c.Service.Function.PutPolicy(
 		ctx,
 		computed.Resource.Policy.Arn,
-		deploytime.Policy.Content,
+		deploytime.Policy.Decoded,
 		tags,
 	)
 

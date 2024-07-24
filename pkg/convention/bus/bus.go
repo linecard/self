@@ -274,7 +274,7 @@ func (c Convention) listDefined(ctx context.Context, d deployment.Deployment) ([
 				},
 			},
 			Meta{
-				Expression: bus.Content,
+				Expression: bus.Decoded,
 			},
 		})
 	}

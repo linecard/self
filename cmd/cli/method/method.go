@@ -2,12 +2,11 @@ package method
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/linecard/self/cmd/cli/param"
+	"github.com/linecard/self/cmd/cli/view"
 	"github.com/linecard/self/pkg/convention/config"
-	"github.com/linecard/self/pkg/convention/manifest"
 	"github.com/linecard/self/pkg/sdk"
 
 	"github.com/charmbracelet/lipgloss/table"
@@ -31,7 +30,7 @@ func BuildRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.
 	}
 }
 
-func PublishRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.Release) {
+func PublishRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.Publish) {
 	buildtime, computed, err := cfg.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msgf("failed lookup for %s", p.FunctionArg.Path)
@@ -65,7 +64,7 @@ func DeployRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
 
-	release, err := api.Release.Find(ctx, computed.Repository.Path, p.Branch)
+	release, err := api.Release.Find(ctx, computed.Repository.Name, p.Branch)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release")
 	}
@@ -137,7 +136,7 @@ func ListDeployments(ctx context.Context, cfg config.Config, api sdk.API, p *par
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
 
-	deployments, err := api.Deployment.List(ctx, computed.Resource.Prefix)
+	deployments, err := api.Deployment.List(ctx, computed.Resource.Namespace)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to list deployments")
 	}
@@ -151,7 +150,7 @@ func ListDeployments(ctx context.Context, cfg config.Config, api sdk.API, p *par
 	fmt.Println(t.Render())
 }
 
-func InspectRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.Inspect) {
+func PrintDeployTime(ctx context.Context, cfg config.Config, api sdk.API, p *param.DeployTime) {
 	_, computed, err := cfg.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
@@ -162,25 +161,49 @@ func InspectRelease(ctx context.Context, cfg config.Config, api sdk.API, p *para
 		log.Fatal().Err(err).Msg("failed to find release")
 	}
 
+	deploytime, computed, err := cfg.Parse(release.Config.Labels)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to decode deploytime schema")
 	}
 
-	deploytime, err := manifest.Decode(release.Config.Labels, release.Uri)
-
-	dJson, err := json.Marshal(deploytime)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to unmarshal deploytime schema")
+	v := view.DeployTimeView{
+		Manifest: deploytime,
+		Computed: computed,
 	}
 
-	fmt.Println(string(dJson))
+	vJson, err := v.Json()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to marshal deploytime view data")
+	}
+
+	fmt.Println(string(vJson))
 }
 
-func PrintConfig(ctx context.Context, cfg config.Config, api sdk.API, p *param.Config) {
-	cJson, err := cfg.Json(ctx)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to print configuration")
+func PrintBuildTime(ctx context.Context, cfg config.Config, api sdk.API, p *param.BuildTime) {
+	if p.Global {
+		computedJson, err := cfg.Json(ctx)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to print configuration")
+		}
+
+		fmt.Println(computedJson)
+		return
 	}
 
-	fmt.Println(cJson)
+	buildtime, computed, err := cfg.Find(p.FunctionArg.Path)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to find buildtime schema")
+	}
+
+	v := view.BuildTimeView{
+		Manifest: buildtime,
+		Computed: computed,
+	}
+
+	viewJson, err := v.Json()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to marshal buildtime view data")
+	}
+
+	fmt.Println(viewJson)
 }

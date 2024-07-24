@@ -36,8 +36,6 @@ func Listen(tp *sdktrace.TracerProvider) {
 func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 	BeforeEach(ctx, event)
 
-	var rs config.ReleaseSchema
-
 	if util.ShaLike(event.Detail.ImageTag) {
 		log.Warn().
 			Str("repository", event.Detail.RepositoryName).
@@ -68,16 +66,6 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 			span.SetStatus(codes.Error, err.Error())
 			return fmt.Errorf("failed to find release: %v", err)
 		}
-
-		deploytime, err := rs.Decode(cfg.Account.Id, cfg.Registry.Id, cfg.Registry.Region, release.Config.Labels)
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return fmt.Errorf("failed to decode deploytime schema: %v", err)
-		}
-
-		span.SetAttributes(
-			attribute.String("self.deploy.sha", deploytime.Sha.Value),
-		)
 
 		deployment, err := api.Deployment.Deploy(ctx, release)
 		if err != nil {

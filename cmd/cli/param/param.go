@@ -21,7 +21,7 @@ type Build struct {
 	FunctionArg
 }
 
-type Release struct {
+type Publish struct {
 	Login            bool `arg:"-l,--ecr-login" help:"Login to ECR"`
 	EnsureRepository bool `arg:"-r,--ensure-repository,env:DEFAULT_ENSURE_REPOSITORY"`
 	Build
@@ -48,11 +48,17 @@ type Deployments struct {
 	FunctionArg
 }
 
-type Inspect struct {
+type DeployTime struct {
 	GitOpts
 	FunctionArg
 }
 
-type Config struct {
-	GitOpts
+type BuildTime struct {
+	Global bool `arg:"-g,--global" help:"show discovered config"`
+	FunctionArg
+}
+
+type Inspect struct {
+	Build  *BuildTime  `arg:"subcommand:build" help:"View encoded buildtime config"`
+	Deploy *DeployTime `arg:"subcommand:deploy" help:"View parsed deploytime config"`
 }

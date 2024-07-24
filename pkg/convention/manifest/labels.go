@@ -14,24 +14,24 @@ import (
 
 type StringLabel struct {
 	Description string
-	Content     string
-	Raw         string
+	Encoded     string
+	Decoded     string
 	Key         string
 	Required    bool
 }
 
 type FileLabel struct {
 	Description string
-	Content     string
-	Raw         string
+	Decoded     string
+	Encoded     string
 	Key         string
 	Required    bool
 }
 
 type EmbeddedFileLabel struct {
 	Description string
-	Content     string
-	Raw         string
+	Decoded     string
+	Encoded     string
 	Key         string
 	Required    bool
 }
@@ -39,7 +39,6 @@ type EmbeddedFileLabel struct {
 type FolderLabel struct {
 	Description string
 	Content     []FileLabel
-	Raw         string
 	KeyPrefix   string
 	Required    bool
 }
@@ -59,11 +58,11 @@ func templateString(content string, data any) (string, error) {
 }
 
 func (s *StringLabel) Encode(content string) error {
-	if s.Required && s.Content == "" {
+	if s.Required && content == "" {
 		return fmt.Errorf("label %s requirement failed", s.Key)
 	}
-	s.Raw = content
-	s.Content = base64.StdEncoding.EncodeToString([]byte(content))
+	s.Decoded = content
+	s.Encoded = base64.StdEncoding.EncodeToString([]byte(content))
 	return nil
 }
 
@@ -74,8 +73,8 @@ func (s *StringLabel) Decode(labels map[string]string) error {
 			if err != nil {
 				return err
 			}
-			s.Raw = v
-			s.Content = string(decoded)
+			s.Encoded = v
+			s.Decoded = string(decoded)
 			return nil
 		}
 	}
@@ -88,7 +87,7 @@ func (s *StringLabel) Decode(labels map[string]string) error {
 }
 
 func (s *StringLabel) Template(data any) (err error) {
-	if s.Content, err = templateString(s.Content, data); err != nil {
+	if s.Decoded, err = templateString(s.Decoded, data); err != nil {
 		return err
 	}
 	return nil
@@ -112,29 +111,25 @@ func (f *EmbeddedFileLabel) Encode(path string) error {
 	}
 
 	if strings.Contains(path, ".json") {
-		compacted := new(bytes.Buffer)
-
 		if !json.Valid(byteContent) {
 			return fmt.Errorf("invalid JSON in %s", path)
 		}
 
-		if err := json.Compact(compacted, byteContent); err != nil {
-			return err
-		}
+		compacted := Compact(byteContent)
 
-		f.Content = base64.StdEncoding.EncodeToString(compacted.Bytes())
+		f.Decoded = string(compacted)
+		f.Encoded = base64.StdEncoding.EncodeToString(compacted)
 		return nil
 	}
 
 	chomped := strings.TrimSuffix(string(byteContent), "\r\n")
 	chomped = strings.TrimPrefix(chomped, "\r\n")
-	f.Raw = chomped
-	f.Content = base64.StdEncoding.EncodeToString([]byte(chomped))
+	f.Decoded = chomped
+	f.Encoded = base64.StdEncoding.EncodeToString([]byte(chomped))
 	return nil
 }
 
 func (f *EmbeddedFileLabel) Decode(labels map[string]string) error {
-	fmt.Println(f.Key)
 	for k, v := range labels {
 		if k == f.Key {
 			decoded, err := base64.StdEncoding.DecodeString(v)
@@ -142,8 +137,8 @@ func (f *EmbeddedFileLabel) Decode(labels map[string]string) error {
 				return err
 			}
 
-			f.Raw = v
-			f.Content = string(decoded)
+			f.Decoded = v
+			f.Encoded = string(decoded)
 			return nil
 		}
 	}
@@ -156,7 +151,7 @@ func (f *EmbeddedFileLabel) Decode(labels map[string]string) error {
 }
 
 func (f *EmbeddedFileLabel) Template(data any) (err error) {
-	if f.Content, err = templateString(f.Content, data); err != nil {
+	if f.Decoded, err = templateString(f.Decoded, data); err != nil {
 		return err
 	}
 	return nil
@@ -180,23 +175,21 @@ func (f *FileLabel) Encode(path string) error {
 	}
 
 	if strings.Contains(path, ".json") {
-		compacted := new(bytes.Buffer)
-
 		if !json.Valid(byteContent) {
 			return fmt.Errorf("invalid JSON in %s", path)
 		}
 
-		if err := json.Compact(compacted, byteContent); err != nil {
-			return err
-		}
+		compacted := Compact(byteContent)
 
-		f.Content = base64.StdEncoding.EncodeToString(compacted.Bytes())
+		f.Decoded = string(compacted)
+		f.Encoded = base64.StdEncoding.EncodeToString(compacted)
+		return nil
 	}
 
 	chomped := strings.TrimSuffix(string(byteContent), "\r\n")
 	chomped = strings.TrimPrefix(chomped, "\r\n")
-	f.Raw = chomped
-	f.Content = base64.StdEncoding.EncodeToString([]byte(chomped))
+	f.Decoded = chomped
+	f.Encoded = base64.StdEncoding.EncodeToString([]byte(chomped))
 	return nil
 }
 
@@ -208,8 +201,8 @@ func (f *FileLabel) Decode(labels map[string]string) error {
 				return err
 			}
 
-			f.Raw = v
-			f.Content = string(decoded)
+			f.Encoded = v
+			f.Decoded = string(decoded)
 			return nil
 		}
 	}
@@ -222,7 +215,7 @@ func (f *FileLabel) Decode(labels map[string]string) error {
 }
 
 func (f *FileLabel) Template(data any) (err error) {
-	if f.Content, err = templateString(f.Content, data); err != nil {
+	if f.Decoded, err = templateString(f.Decoded, data); err != nil {
 		return err
 	}
 	return nil
@@ -297,8 +290,8 @@ func (f FolderLabel) Decode(labels map[string]string) error {
 			f.Content = append(f.Content, FileLabel{
 				Description: "Individual embedded bus template",
 				Key:         k,
-				Raw:         v,
-				Content:     string(decodedLabel),
+				Encoded:     v,
+				Decoded:     string(decodedLabel),
 			})
 		}
 	}
@@ -312,9 +305,41 @@ func (f FolderLabel) Decode(labels map[string]string) error {
 
 func (fldr *FolderLabel) Template(data any) (err error) {
 	for _, f := range fldr.Content {
-		if f.Content, err = templateString(f.Content, data); err != nil {
+		if f.Decoded, err = templateString(f.Decoded, data); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// Lifted from https://github.com/tidwall/pretty/blob/master/pretty.go
+func Compact(json []byte) []byte {
+	buf := make([]byte, 0, len(json))
+	return compact(buf, json)
+}
+
+func compact(dst, src []byte) []byte {
+	dst = dst[:0]
+	for i := 0; i < len(src); i++ {
+		if src[i] > ' ' {
+			dst = append(dst, src[i])
+			if src[i] == '"' {
+				for i = i + 1; i < len(src); i++ {
+					dst = append(dst, src[i])
+					if src[i] == '"' {
+						j := i - 1
+						for ; ; j-- {
+							if src[j] != '\\' {
+								break
+							}
+						}
+						if (j-i)%2 != 0 {
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+	return dst
 }

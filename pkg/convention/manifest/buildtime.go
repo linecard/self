@@ -36,7 +36,7 @@ func Encode(path string, git gitlib.DotGit) (b BuildTime, err error) {
 		return b, err
 	}
 
-	if err = s.Role.Encode("roles/lambda.json.tmpl"); err != nil {
+	if err = s.Role.Encode("embedded/roles/lambda.json.tmpl"); err != nil {
 		return b, err
 	}
 
@@ -59,20 +59,20 @@ func Encode(path string, git gitlib.DotGit) (b BuildTime, err error) {
 	}, nil
 }
 
-func (b BuildTime) LabelMap() map[string]string {
+func (b BuildTime) EncodedLabels() map[string]string {
 	m := make(map[string]string)
 
-	m[b.Schema.Key] = b.Schema.Content
-	m[b.Name.Key] = b.Name.Content
-	m[b.Branch.Key] = b.Branch.Content
-	m[b.Sha.Key] = b.Sha.Content
-	m[b.Origin.Key] = b.Origin.Content
-	m[b.Role.Key] = b.Role.Content
-	m[b.Policy.Key] = b.Policy.Content
-	m[b.Resources.Key] = b.Resources.Content
+	m[b.Schema.Key] = b.Schema.Encoded
+	m[b.Name.Key] = b.Name.Encoded
+	m[b.Branch.Key] = b.Branch.Encoded
+	m[b.Sha.Key] = b.Sha.Encoded
+	m[b.Origin.Key] = b.Origin.Encoded
+	m[b.Role.Key] = b.Role.Encoded
+	m[b.Policy.Key] = b.Policy.Encoded
+	m[b.Resources.Key] = b.Resources.Encoded
 
 	for _, bus := range b.Bus.Content {
-		m[bus.Key] = bus.Content
+		m[bus.Key] = bus.Encoded
 	}
 
 	return m

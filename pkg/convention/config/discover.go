@@ -57,7 +57,7 @@ func (c *Config) DiscoverRegistry(ctx context.Context, ecrEnvar, regionEnvar str
 	}
 
 	computed := ComputedRegistry{}
-	computed.Solve(c.Registry.Region, c.Registry.Id)
+	computed.Solve(c.Registry.Id, c.Registry.Region)
 	c.Registry.Url = computed.Url
 
 	return nil

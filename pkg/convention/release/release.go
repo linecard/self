@@ -71,11 +71,11 @@ func FromServices(c config.Config, r RegistryService, b BuildService) Convention
 	}
 }
 
-func (c Convention) Find(ctx context.Context, repositoryPath, tag string) (Release, error) {
+func (c Convention) Find(ctx context.Context, repositoryName, tag string) (Release, error) {
 	ctx, span := otel.Tracer("").Start(ctx, "release.Find")
 	defer span.End()
 
-	inspect, err := c.Service.Registry.InspectByTag(ctx, c.Config.Registry.Id, repositoryPath, tag)
+	inspect, err := c.Service.Registry.InspectByTag(ctx, c.Config.Registry.Id, repositoryName, tag)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err
@@ -84,7 +84,7 @@ func (c Convention) Find(ctx context.Context, repositoryPath, tag string) (Relea
 	registry := config.ComputedRegistry{}
 	registry.Solve(c.Config.Registry.Region, c.Config.Registry.Id)
 
-	uri, err := c.Service.Registry.ImageUri(ctx, c.Config.Registry.Id, registry.Url, repositoryPath, tag)
+	uri, err := c.Service.Registry.ImageUri(ctx, c.Config.Registry.Id, registry.Url, repositoryName, tag)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err
@@ -140,11 +140,11 @@ func (c Convention) Build(ctx context.Context, buildtime manifest.BuildTime, com
 	tags := []string{ // make this a part of computed.
 		fmt.Sprintf("%s:%s",
 			computed.Repository.Url,
-			buildtime.Branch.Raw,
+			buildtime.Branch.Decoded,
 		),
 		fmt.Sprintf("%s:%s",
 			computed.Repository.Url,
-			buildtime.Sha.Raw,
+			buildtime.Sha.Decoded,
 		),
 	}
 
@@ -152,7 +152,7 @@ func (c Convention) Build(ctx context.Context, buildtime manifest.BuildTime, com
 		ctx,
 		buildtime.Path,
 		buildtime.Context,
-		buildtime.LabelMap(),
+		buildtime.EncodedLabels(),
 		tags,
 	)
 
@@ -163,8 +163,8 @@ func (c Convention) Build(ctx context.Context, buildtime manifest.BuildTime, com
 	inspect, err := c.Service.Build.InspectByTag(
 		ctx,
 		computed.Registry.Url,
-		computed.Repository.Path,
-		buildtime.Sha.Raw,
+		computed.Repository.Name,
+		buildtime.Sha.Decoded,
 	)
 
 	if err != nil {
@@ -175,7 +175,7 @@ func (c Convention) Build(ctx context.Context, buildtime manifest.BuildTime, com
 }
 
 func (c Convention) Publish(ctx context.Context, i Image) error {
-	// This is a very fuzzy validation. Largely catches issues with messy commits and mutable tagging ecr-side.
+	// This is a very fuzzy validation. Catches issues with messy commits and mutable tagging ecr-side.
 	if len(i.RepoTags) != 2 {
 		for _, tag := range i.RepoTags {
 			fmt.Println(tag)
