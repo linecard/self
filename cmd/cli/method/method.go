@@ -25,9 +25,22 @@ func BuildRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.
 		log.Fatal().Err(err).Msgf("failed lookup for %s", p.FunctionArg.Path)
 	}
 
-	if _, err := api.Release.Build(ctx, buildtime, computed); err != nil {
+	image, err := api.Release.Build(ctx, buildtime, computed)
+	if err != nil {
 		log.Fatal().Err(err).Msg("failed to build release")
 	}
+
+	if p.Run {
+		creds, err := cfg.AssumeRoleWithPolicy(ctx, buildtime.Policy.Decoded)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to assume role with policy")
+		}
+
+		if err := api.Runtime.Emulate(ctx, image, creds); err != nil {
+			log.Fatal().Err(err).Msg("failed to emulate runtime")
+		}
+	}
+
 }
 
 func PublishRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.Publish) {
@@ -122,7 +135,12 @@ func ListReleases(ctx context.Context, cfg config.Config, api sdk.API, p *param.
 
 	t.Headers("HEAD", "SHA", "DIGEST", "RELEASED")
 	for _, release := range releases {
-		t.Row(release.Branch, release.GitSha, release.ImageDigest, release.Released)
+		t.Row(
+			release.Branch,
+			release.GitSha,
+			release.ImageDigest,
+			release.Released,
+		)
 	}
 
 	fmt.Println(t.Render())

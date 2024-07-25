@@ -15,8 +15,9 @@ type Init struct {
 }
 
 type Build struct {
-	SSHAgent bool   `arg:"-a,--ssh-agent" help:"mount ssh-agent into build (TODO)"`
+	SSHAgent bool   `arg:"-a,--ssh-agent" help:"mount ssh-agent into build (not yet implemented)"`
 	Context  string `arg:"-c,--build-context,env:DEFAULT_BUILD_CONTEXT" help:"build context path"`
+	Run      bool   `arg:"-r,--run" help:"run the function locally after building"`
 	GitOpts
 	FunctionArg
 }
