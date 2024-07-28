@@ -86,7 +86,7 @@ func OtelConfigPresent() bool {
 
 func RoleArnFromAssumeRoleArn(arn string) (string, error) {
 	if !strings.Contains(arn, "assumed-role") {
-		return "", fmt.Errorf("no assumed role found in ARN; self assumable role is the only valid type of caller")
+		return "", fmt.Errorf("assumed-role not found in arn, policy emulation only supports self-assumable roles")
 	}
 
 	// Split the ARN to find the assumed-role part

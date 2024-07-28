@@ -6,13 +6,13 @@ import (
 
 	"github.com/linecard/self/cmd/cli/method"
 	"github.com/linecard/self/cmd/cli/param"
-	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/sdk"
 
 	"github.com/alexflint/go-arg"
 )
 
 type Root struct {
+	param.GitOpts
 	Init        *param.Init        `arg:"subcommand:init" help:"Initialize a new function"`
 	Build       *param.Build       `arg:"subcommand:build" help:"Build a function"`
 	Publish     *param.Publish     `arg:"subcommand:publish" help:"Publish a release"`
@@ -23,36 +23,36 @@ type Root struct {
 	Inspect     *param.Inspect     `arg:"subcommand:inspect" help:"Inspect config"`
 }
 
-func (c Root) Handle(ctx context.Context, cfg config.Config, api sdk.API) {
+func (c Root) Route(ctx context.Context, api sdk.API) {
 	switch {
 	case c.Init != nil:
 		method.InitFunction(ctx, api, c.Init)
 
 	case c.Build != nil:
-		method.BuildRelease(ctx, cfg, api, c.Build)
+		method.BuildRelease(ctx, api, c.Build)
 
 	case c.Publish != nil:
-		method.PublishRelease(ctx, cfg, api, c.Publish)
+		method.PublishRelease(ctx, api, c.Publish)
 
 	case c.Releases != nil:
-		method.ListReleases(ctx, cfg, api, c.Releases)
+		method.ListReleases(ctx, api, c.Releases)
 
 	case c.Deploy != nil:
-		method.DeployRelease(ctx, cfg, api, c.Deploy)
+		method.DeployRelease(ctx, api, c.Deploy)
 
 	case c.Deployments != nil:
-		method.ListDeployments(ctx, cfg, api, c.Deployments)
+		method.ListDeployments(ctx, api, c.Deployments)
 
 	case c.Destroy != nil:
-		method.DestroyDeployment(ctx, cfg, api, c.Destroy)
+		method.DestroyDeployment(ctx, api, c.Destroy)
 
 	case c.Inspect != nil:
 		switch {
 		case c.Inspect.Build != nil:
-			method.PrintBuildTime(ctx, cfg, api, c.Inspect.Build)
+			method.PrintBuildTime(ctx, api, c.Inspect.Build)
 
 		case c.Inspect.Deploy != nil:
-			method.PrintDeployTime(ctx, cfg, api, c.Inspect.Deploy)
+			method.PrintDeployTime(ctx, api, c.Inspect.Deploy)
 
 		default:
 			arg.MustParse(&c).WriteHelpForSubcommand(os.Stdout, "inspect")

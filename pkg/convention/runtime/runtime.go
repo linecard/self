@@ -48,7 +48,7 @@ func (c Convention) Emulate(ctx context.Context, i release.Image, s *types.Crede
 		return err
 	}
 
-	_, computed, err := c.Config.Parse(i.Config.Labels)
+	deploytime, err := c.Config.Parse(i.Config.Labels)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func (c Convention) Emulate(ctx context.Context, i release.Image, s *types.Crede
 		RiePath:         riePath,
 		Region:          c.Config.Account.Region,
 		ImageUri:        i.RepoTags[0],
-		Function:        computed.Resource.Name,
+		Function:        deploytime.Computed.Resource.Name,
 		Command:         command,
 		AccessKeyId:     *s.AccessKeyId,
 		SecretAccessKey: *s.SecretAccessKey,

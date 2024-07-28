@@ -8,7 +8,6 @@ import (
 
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
-	"github.com/linecard/self/pkg/convention/manifest"
 
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
@@ -133,42 +132,47 @@ func (c Convention) List(ctx context.Context, repositoryName string) ([]ReleaseS
 	return releases, nil
 }
 
-func (c Convention) Build(ctx context.Context, buildtime manifest.BuildTime, computed config.Computed) (Image, error) {
+func (c Convention) Build(ctx context.Context, path, context string) (Image, config.BuildTime, error) {
+	buildtime, err := c.Config.Find(path)
+	if err != nil {
+		return Image{}, buildtime, err
+	}
+
 	tags := []string{ // make this a part of computed.
 		fmt.Sprintf("%s:%s",
-			computed.Repository.Url,
+			buildtime.Computed.Repository.Url,
 			buildtime.Branch.Decoded,
 		),
 		fmt.Sprintf("%s:%s",
-			computed.Repository.Url,
+			buildtime.Computed.Repository.Url,
 			buildtime.Sha.Decoded,
 		),
 	}
 
-	err := c.Service.Build.Build(
+	err = c.Service.Build.Build(
 		ctx,
-		buildtime.Path,
-		buildtime.Context,
+		path,
+		context,
 		buildtime.EncodedLabels(),
 		tags,
 	)
 
 	if err != nil {
-		return Image{}, err
+		return Image{}, buildtime, err
 	}
 
 	inspect, err := c.Service.Build.InspectByTag(
 		ctx,
-		computed.Registry.Url,
-		computed.Repository.Name,
+		buildtime.Computed.Registry.Url,
+		buildtime.Computed.Repository.Name,
 		buildtime.Sha.Decoded,
 	)
 
 	if err != nil {
-		return Image{}, err
+		return Image{}, buildtime, err
 	}
 
-	return Image{inspect}, nil
+	return Image{inspect}, buildtime, nil
 }
 
 func (c Convention) Publish(ctx context.Context, i Image) error {

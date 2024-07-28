@@ -8,8 +8,6 @@ import (
 
 type BuildTime struct {
 	Release
-	Path    string
-	Context string
 }
 
 func Encode(path string, git gitlib.DotGit) (b BuildTime, err error) {
@@ -53,8 +51,6 @@ func Encode(path string, git gitlib.DotGit) (b BuildTime, err error) {
 	}
 
 	return BuildTime{
-		Path:    path,
-		Context: path,
 		Release: s,
 	}, nil
 }

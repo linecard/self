@@ -1,12 +1,12 @@
 package param
 
-type FunctionArg struct {
-	Path string `arg:"positional" help:"path to function" default:"."`
-}
-
 type GitOpts struct {
 	Branch string `arg:"-b,--branch,env:DEFAULT_BRANCH"`
 	Sha    string `arg:"-s,--sha,env:DEFAULT_SHA"`
+}
+
+type FunctionArg struct {
+	Path string `arg:"positional" help:"path to function" default:"."`
 }
 
 type Init struct {
@@ -16,46 +16,38 @@ type Init struct {
 
 type Build struct {
 	SSHAgent bool   `arg:"-a,--ssh-agent" help:"mount ssh-agent into build (not yet implemented)"`
-	Context  string `arg:"-c,--build-context,env:DEFAULT_BUILD_CONTEXT" help:"build context path"`
-	Run      bool   `arg:"-r,--run" help:"run the function locally after building"`
-	GitOpts
+	Context  string `arg:"-c,--build-context" help:"set builtime path"`
+	Run      bool   `arg:"-x,--run" help:"run the function locally after building"`
 	FunctionArg
 }
 
 type Publish struct {
 	Login            bool `arg:"-l,--ecr-login" help:"Login to ECR"`
-	EnsureRepository bool `arg:"-r,--ensure-repository,env:DEFAULT_ENSURE_REPOSITORY"`
+	EnsureRepository bool `arg:"-e,--ensure-repository,env:DEFAULT_ENSURE_REPOSITORY"`
 	Build
-	GitOpts
 }
 
 type Deploy struct {
-	GitOpts
 	FunctionArg
 }
 
 type Destroy struct {
-	GitOpts
 	FunctionArg
 }
 
 type Releases struct {
-	GitOpts
 	FunctionArg
 }
 
 type Deployments struct {
-	GitOpts
 	FunctionArg
 }
 
 type DeployTime struct {
-	GitOpts
 	FunctionArg
 }
 
 type BuildTime struct {
-	Global bool `arg:"-g,--global" help:"show discovered config"`
 	FunctionArg
 }
 

@@ -95,24 +95,17 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	ctx, span := otel.Tracer("").Start(ctx, "deployment.Deploy")
 	defer span.End()
 
-	deploytime, computed, err := c.Config.Parse(r.Config.Labels)
+	deploytime, err := c.Config.Parse(r.Config.Labels)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
-	tags := map[string]string{
-		"Function": deploytime.Name.Decoded,
-		"Origin":   deploytime.Origin.Decoded,
-		"Branch":   deploytime.Branch.Decoded,
-		"Sha":      deploytime.Sha.Decoded,
-	}
-
 	role, err := c.Service.Function.PutRole(
 		ctx,
-		computed.Resource.Name,
+		deploytime.Computed.Resource.Name,
 		deploytime.Role.Decoded,
-		tags,
+		deploytime.Computed.Resource.Tags,
 	)
 
 	if err != nil {
@@ -122,9 +115,9 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 
 	policy, err := c.Service.Function.PutPolicy(
 		ctx,
-		computed.Resource.Policy.Arn,
+		deploytime.Computed.Resource.Policy.Arn,
 		deploytime.Policy.Decoded,
-		tags,
+		deploytime.Computed.Resource.Tags,
 	)
 
 	if err != nil {
@@ -145,19 +138,19 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 
 	// create function parameters
 	input := &lambda.CreateFunctionInput{
-		FunctionName:  aws.String(computed.Resource.Name),
+		FunctionName:  aws.String(deploytime.Computed.Resource.Name),
 		Role:          role.Role.Arn,
-		Tags:          tags,
+		Tags:          deploytime.Computed.Resource.Tags,
 		Architectures: r.AWSArchitecture,
 		PackageType:   types.PackageTypeImage,
-		Timeout:       &computed.Resources.Timeout,
-		MemorySize:    &computed.Resources.MemorySize,
+		Timeout:       &deploytime.Computed.Resources.Timeout,
+		MemorySize:    &deploytime.Computed.Resources.MemorySize,
 		VpcConfig: &types.VpcConfig{
 			SecurityGroupIds: c.Config.Vpc.SecurityGroupIds,
 			SubnetIds:        c.Config.Vpc.SubnetIds,
 		},
 		EphemeralStorage: &types.EphemeralStorage{
-			Size: &computed.Resources.EphemeralStorage,
+			Size: &deploytime.Computed.Resources.EphemeralStorage,
 		},
 		Code: &types.FunctionCode{
 			ImageUri: aws.String(r.Uri),
@@ -186,7 +179,7 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 
 		// After creating the function with this ENI garbage collection role, we can go ahead and attach the role we actually want.
 		_, err = c.Service.Function.PatchFunction(ctx, &lambda.UpdateFunctionConfigurationInput{
-			FunctionName: aws.String(computed.Resource.Name),
+			FunctionName: aws.String(deploytime.Computed.Resource.Name),
 			Role:         role.Role.Arn,
 		})
 
@@ -195,7 +188,7 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 			return Deployment{}, err
 		}
 
-		return c.Find(ctx, computed.Resource.Name)
+		return c.Find(ctx, deploytime.Computed.Resource.Name)
 	}
 
 	// Does not have VPC config
@@ -203,7 +196,7 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
-	return c.Find(ctx, computed.Resource.Name)
+	return c.Find(ctx, deploytime.Computed.Resource.Name)
 }
 
 func (c Convention) Destroy(ctx context.Context, d Deployment) error {

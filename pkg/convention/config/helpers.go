@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -82,15 +81,6 @@ func (c Config) AssumeRoleWithPolicy(ctx context.Context, policy string) (*types
 		SecretAccessKey: &fallback.SecretAccessKey,
 		SessionToken:    &fallback.SessionToken,
 	}, nil
-}
-
-func (c Config) Json(ctx context.Context) (string, error) {
-	cJson, err := json.Marshal(c)
-	if err != nil {
-		return "", err
-	}
-
-	return string(cJson), nil
 }
 
 func (c Config) Scaffold(templateName, functionName string) error {

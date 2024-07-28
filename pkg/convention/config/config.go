@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -64,6 +65,14 @@ type TemplateData struct {
 	RegistryAccountId string
 }
 
+type Repository struct {
+	Namespace string
+}
+
+type Resource struct {
+	Namespace string
+}
+
 type Selfish struct {
 	Path string
 	Name string
@@ -75,38 +84,40 @@ type Config struct {
 	Account      Account
 	Git          gitlib.DotGit
 	Registry     Registry
+	Repository   Repository
+	Resource     Resource
 	ApiGateway   ApiGateway
 	Vpc          Vpc
 	TemplateData TemplateData
 	Version      string
 }
 
-func (c Config) Find(buildPath string) (buildtime manifest.BuildTime, computed Computed, err error) {
+func (c Config) Find(buildPath string) (BuildTime, error) {
 	absPath, err := filepath.Abs(buildPath)
 	if err != nil {
-		return
+		return BuildTime{}, err
 	}
 
 	for _, s := range c.Selfish {
 		if s.Path == absPath {
-			if buildtime, err = manifest.Encode(absPath, c.Git); err != nil {
-				return
+			buildtime, err := manifest.Encode(absPath, c.Git)
+			if err != nil {
+				return BuildTime{}, err
 			}
-
-			return c.SolveBuildTime(buildtime)
+			return c.ComputeBuildTime(buildtime)
 		}
 	}
 
-	return buildtime, computed, fmt.Errorf("%s does not appear to be selfish", absPath)
+	return BuildTime{}, fmt.Errorf("no selfish found for %s", absPath)
 }
 
-func (c Config) Parse(labels map[string]string) (deploytime manifest.DeployTime, computed Computed, err error) {
-	deploytime, err = manifest.Decode(labels, c.TemplateData)
+func (c Config) Parse(labels map[string]string) (DeployTime, error) {
+	deploytime, err := manifest.Decode(labels, c.TemplateData)
 	if err != nil {
-		return
+		return DeployTime{}, err
 	}
 
-	return c.SolveDeployTime(deploytime)
+	return c.ComputeDeployTime(deploytime)
 }
 
 func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClient, stsc STSClient) (err error) {
@@ -134,12 +145,14 @@ func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClie
 		return
 	}
 
-	c.TemplateData = TemplateData{
-		AccountId:         c.Account.Id,
-		Region:            c.Account.Region,
-		RegistryRegion:    c.Registry.Region,
-		RegistryAccountId: c.Registry.Id,
-	}
+	nameSpace := strings.TrimSuffix(c.Git.Origin.Path, ".git")
+	c.Repository.Namespace = strings.TrimPrefix(nameSpace, "/")
+	c.Resource.Namespace = util.DeSlasher(nameSpace)
+
+	c.TemplateData.AccountId = c.Account.Id
+	c.TemplateData.Region = c.Account.Region
+	c.TemplateData.RegistryRegion = c.Registry.Region
+	c.TemplateData.RegistryAccountId = c.Registry.Id
 
 	return
 }
@@ -165,13 +178,6 @@ func (c *Config) FromEvent(ctx context.Context, awsConfig aws.Config, ecrc ECRCl
 		c.Git.Sha = event.Detail.ImageTag
 	} else {
 		c.Git.Branch = event.Detail.ImageTag
-	}
-
-	c.TemplateData = TemplateData{
-		AccountId:         c.Account.Id,
-		Region:            c.Account.Region,
-		RegistryRegion:    c.Registry.Region,
-		RegistryAccountId: c.Registry.Id,
 	}
 
 	return

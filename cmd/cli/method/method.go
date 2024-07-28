@@ -2,11 +2,10 @@ package method
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/linecard/self/cmd/cli/param"
-	"github.com/linecard/self/cmd/cli/view"
-	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/sdk"
 
 	"github.com/charmbracelet/lipgloss/table"
@@ -19,19 +18,23 @@ func InitFunction(ctx context.Context, api sdk.API, p *param.Init) {
 	}
 }
 
-func BuildRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.Build) {
-	buildtime, computed, err := cfg.Find(p.FunctionArg.Path)
-	if err != nil {
-		log.Fatal().Err(err).Msgf("failed lookup for %s", p.FunctionArg.Path)
+func BuildRelease(ctx context.Context, api sdk.API, p *param.Build) {
+	if p.Context == "" {
+		p.Context = p.Path
 	}
 
-	image, err := api.Release.Build(ctx, buildtime, computed)
+	image, _, err := api.Release.Build(ctx, p.Path, p.Context)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to build release")
 	}
 
 	if p.Run {
-		creds, err := cfg.AssumeRoleWithPolicy(ctx, buildtime.Policy.Decoded)
+		deploytime, err := api.Config.Parse(image.Config.Labels)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to decode deploytime schema")
+		}
+
+		creds, err := api.Config.AssumeRoleWithPolicy(ctx, deploytime.Policy.Decoded)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to assume role with policy")
 		}
@@ -40,13 +43,11 @@ func BuildRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.
 			log.Fatal().Err(err).Msg("failed to emulate runtime")
 		}
 	}
-
 }
 
-func PublishRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.Publish) {
-	buildtime, computed, err := cfg.Find(p.FunctionArg.Path)
-	if err != nil {
-		log.Fatal().Err(err).Msgf("failed lookup for %s", p.FunctionArg.Path)
+func PublishRelease(ctx context.Context, api sdk.API, p *param.Publish) {
+	if p.Context == "" {
+		p.Context = p.Path
 	}
 
 	if p.Login {
@@ -55,15 +56,15 @@ func PublishRelease(ctx context.Context, cfg config.Config, api sdk.API, p *para
 		}
 	}
 
-	if p.EnsureRepository {
-		if err := api.Release.EnsureRepository(ctx, computed.Repository.Name); err != nil {
-			log.Fatal().Err(err).Msg("failed to ensure ECR repository")
-		}
-	}
-
-	image, err := api.Release.Build(ctx, buildtime, computed)
+	image, buildtime, err := api.Release.Build(ctx, p.Path, p.Context)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to build release")
+	}
+
+	if p.EnsureRepository {
+		if err := api.Release.EnsureRepository(ctx, buildtime.Computed.Repository.Name); err != nil {
+			log.Fatal().Err(err).Msg("failed to ensure ECR repository")
+		}
 	}
 
 	if err := api.Release.Publish(ctx, image); err != nil {
@@ -71,13 +72,13 @@ func PublishRelease(ctx context.Context, cfg config.Config, api sdk.API, p *para
 	}
 }
 
-func DeployRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param.Deploy) {
-	_, computed, err := cfg.Find(p.FunctionArg.Path)
+func DeployRelease(ctx context.Context, api sdk.API, p *param.Deploy) {
+	buildtime, err := api.Config.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
 
-	release, err := api.Release.Find(ctx, computed.Repository.Name, p.Branch)
+	release, err := api.Release.Find(ctx, buildtime.Computed.Repository.Name, api.Config.Git.Branch)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release")
 	}
@@ -96,13 +97,13 @@ func DeployRelease(ctx context.Context, cfg config.Config, api sdk.API, p *param
 	}
 }
 
-func DestroyDeployment(ctx context.Context, cfg config.Config, api sdk.API, p *param.Destroy) {
-	_, computed, err := cfg.Find(p.FunctionArg.Path)
+func DestroyDeployment(ctx context.Context, api sdk.API, p *param.Destroy) {
+	buildtime, err := api.Config.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
 
-	deployment, err := api.Deployment.Find(ctx, computed.Resource.Name)
+	deployment, err := api.Deployment.Find(ctx, buildtime.Computed.Resource.Name)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find deployment")
 	}
@@ -120,15 +121,15 @@ func DestroyDeployment(ctx context.Context, cfg config.Config, api sdk.API, p *p
 	}
 }
 
-func ListReleases(ctx context.Context, cfg config.Config, api sdk.API, p *param.Releases) {
+func ListReleases(ctx context.Context, api sdk.API, p *param.Releases) {
 	t := table.New()
 
-	_, computed, err := cfg.Find(p.FunctionArg.Path)
+	buildtime, err := api.Config.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
 
-	releases, err := api.Release.List(ctx, computed.Repository.Name)
+	releases, err := api.Release.List(ctx, buildtime.Computed.Repository.Name)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to list releases")
 	}
@@ -146,24 +147,20 @@ func ListReleases(ctx context.Context, cfg config.Config, api sdk.API, p *param.
 	fmt.Println(t.Render())
 }
 
-func ListDeployments(ctx context.Context, cfg config.Config, api sdk.API, p *param.Deployments) {
+func ListDeployments(ctx context.Context, api sdk.API, p *param.Deployments) {
 	t := table.New()
 
-	_, computed, err := cfg.Find(p.FunctionArg.Path)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to find release schema")
-	}
-
-	deployments, err := api.Deployment.List(ctx, computed.Resource.Namespace)
+	branchFilter := api.Config.Resource.Namespace + "-" + api.Config.Git.Branch
+	deployments, err := api.Deployment.List(ctx, branchFilter)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to list deployments")
 	}
 
-	t.Headers("HEAD", "SHA", "DIGEST", "DEPLOYED")
+	t.Headers("Deployment", "HEAD", "SHA", "DIGEST", "DEPLOYED")
 
 	for _, deployment := range deployments {
-		fmt.Println(deployment.Tags)
 		t.Row(
+			deployment.Tags["Function"],
 			deployment.Tags["Branch"],
 			deployment.Tags["Sha"],
 			"sha256:"+*deployment.Configuration.CodeSha256,
@@ -174,60 +171,40 @@ func ListDeployments(ctx context.Context, cfg config.Config, api sdk.API, p *par
 	fmt.Println(t.Render())
 }
 
-func PrintDeployTime(ctx context.Context, cfg config.Config, api sdk.API, p *param.DeployTime) {
-	_, computed, err := cfg.Find(p.FunctionArg.Path)
+func PrintDeployTime(ctx context.Context, api sdk.API, p *param.DeployTime) {
+	buildtime, err := api.Config.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
 
-	release, err := api.Release.Find(ctx, computed.Repository.Name, p.Branch)
+	release, err := api.Release.Find(ctx, buildtime.Computed.Repository.Name, api.Config.Git.Branch)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release")
 	}
 
-	deploytime, computed, err := cfg.Parse(release.Config.Labels)
+	deploytime, err := api.Config.Parse(release.Config.Labels)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to decode deploytime schema")
 	}
 
-	v := view.DeployTimeView{
-		Manifest: deploytime,
-		Computed: computed,
-	}
-
-	vJson, err := v.Json()
+	out, err := json.Marshal(deploytime)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to marshal deploytime view data")
+		log.Fatal().Err(err).Msg("failed to marshal deploytime schema")
 	}
 
-	fmt.Println(string(vJson))
+	fmt.Println(string(out))
 }
 
-func PrintBuildTime(ctx context.Context, cfg config.Config, api sdk.API, p *param.BuildTime) {
-	if p.Global {
-		computedJson, err := cfg.Json(ctx)
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to print configuration")
-		}
-
-		fmt.Println(computedJson)
-		return
-	}
-
-	buildtime, computed, err := cfg.Find(p.FunctionArg.Path)
+func PrintBuildTime(ctx context.Context, api sdk.API, p *param.BuildTime) {
+	buildtime, err := api.Config.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find buildtime schema")
 	}
 
-	v := view.BuildTimeView{
-		Manifest: buildtime,
-		Computed: computed,
-	}
-
-	viewJson, err := v.Json()
+	out, err := json.Marshal(buildtime)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to marshal buildtime view data")
+		log.Fatal().Err(err).Msg("failed to marshal buildtime schema")
 	}
 
-	fmt.Println(viewJson)
+	fmt.Println(string(out))
 }

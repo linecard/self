@@ -56,9 +56,7 @@ func (c *Config) DiscoverRegistry(ctx context.Context, ecrEnvar, regionEnvar str
 		c.Registry.Id = *res.RegistryId
 	}
 
-	computed := ComputedRegistry{}
-	computed.Solve(c.Registry.Id, c.Registry.Region)
-	c.Registry.Url = computed.Url
+	c.Registry.Url = fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com", c.Registry.Id, c.Registry.Region)
 
 	return nil
 }

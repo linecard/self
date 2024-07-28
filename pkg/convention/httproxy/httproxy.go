@@ -66,13 +66,13 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error
 		return err
 	}
 
-	_, computed, err := c.Config.Parse(release.Config.Labels)
+	buildtime, err := c.Config.Parse(release.Config.Labels)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
-	if !computed.Resources.Http {
+	if !buildtime.Computed.Resources.Http {
 		return c.Unmount(ctx, d)
 	}
 
@@ -90,7 +90,7 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 		return err
 	}
 
-	_, computed, err := c.Config.Parse(release.Config.Labels)
+	deploytime, err := c.Config.Parse(release.Config.Labels)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 	integration, err := c.Service.Gateway.PutIntegration(
 		ctx, *c.Config.ApiGateway.Id,
 		*d.Configuration.FunctionArn,
-		computed.Resources.RouteKey,
+		deploytime.Computed.Resources.RouteKey,
 	)
 
 	if err != nil {
@@ -109,8 +109,8 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 		ctx,
 		*c.Config.ApiGateway.Id,
 		*integration.IntegrationId,
-		computed.Resources.RouteKey,
-		computed.Resources.Public,
+		deploytime.Computed.Resources.RouteKey,
+		deploytime.Computed.Resources.Public,
 	)
 
 	if err != nil {
@@ -121,7 +121,7 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 		ctx,
 		*c.Config.ApiGateway.Id,
 		*d.Configuration.FunctionArn,
-		computed.Resources.RouteKey,
+		deploytime.Computed.Resources.RouteKey,
 	)
 
 	if err != nil {

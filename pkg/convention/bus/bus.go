@@ -240,7 +240,7 @@ func (c Convention) listDefined(ctx context.Context, d deployment.Deployment) ([
 		return []Subscription{}, err
 	}
 
-	deploytime, _, err := c.Config.Parse(release.Config.Labels)
+	deploytime, err := c.Config.Parse(release.Config.Labels)
 	if err != nil {
 		return []Subscription{}, err
 	}
