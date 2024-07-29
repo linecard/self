@@ -15,11 +15,11 @@ type Root struct {
 	param.GitOpts
 	Init        *param.Init        `arg:"subcommand:init" help:"Initialize a new function"`
 	Build       *param.Build       `arg:"subcommand:build" help:"Build a function"`
-	Publish     *param.Publish     `arg:"subcommand:publish" help:"Publish a release"`
 	Releases    *param.Releases    `arg:"subcommand:releases" help:"List releases"`
 	Deploy      *param.Deploy      `arg:"subcommand:deploy" help:"Deploy a release"`
-	Deployments *param.Deployments `arg:"subcommand:deployments" help:"List release deployments"`
 	Destroy     *param.Destroy     `arg:"subcommand:destroy" help:"Destroy a release deployment"`
+	Publish     *param.Publish     `arg:"subcommand:publish" help:"Publish a release"`
+	Deployments *param.Deployments `arg:"subcommand:deployments" help:"List release deployments"`
 	Inspect     *param.Inspect     `arg:"subcommand:inspect" help:"Inspect config"`
 }
 

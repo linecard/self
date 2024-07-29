@@ -3,7 +3,9 @@ package config
 import (
 	"encoding/json"
 	"net/url"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/linecard/self/internal/gitlib"
 	"github.com/linecard/self/pkg/convention/manifest"
@@ -107,7 +109,7 @@ func (r *ComputedResource) Solve(account Account, resource Resource, git gitlib.
 
 	r.Tags = map[string]string{
 		"Function": name,
-		"Origin":   git.Origin.Path,
+		"Origin":   git.Origin.String(),
 		"Branch":   git.Branch,
 		"Sha":      git.Sha,
 	}
@@ -128,6 +130,14 @@ func (resources *ComputedResources) Solve(repository Repository, git gitlib.DotG
 		Http:             true,
 		Public:           false,
 		RouteKey:         "ANY /" + repository.Namespace + "/" + git.Branch + "/" + name,
+	}
+
+	// temporary backwards compatability envar
+	if value, exists := os.LookupEnv(envOwnerPrefix); exists {
+		if strings.ToLower(value) == "false" {
+			noOwner := strings.Split(repository.Namespace, "/")[1:]
+			defaults.RouteKey = "ANY /" + strings.Join(noOwner, "/") + "/" + git.Branch + "/" + name
+		}
 	}
 
 	// Start with the default values

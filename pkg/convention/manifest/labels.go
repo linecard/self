@@ -279,7 +279,7 @@ func (f *FolderLabel) Encode(parentPath string) error {
 	return nil
 }
 
-func (f FolderLabel) Decode(labels map[string]string) error {
+func (f *FolderLabel) Decode(labels map[string]string) error {
 	for k, v := range labels {
 		if strings.HasPrefix(k, f.KeyPrefix) {
 			decodedLabel, err := base64.StdEncoding.DecodeString(v)

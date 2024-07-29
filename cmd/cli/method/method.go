@@ -4,8 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
+	"sync"
 
+	"github.com/golang-module/carbon/v2"
 	"github.com/linecard/self/cmd/cli/param"
+	"github.com/linecard/self/internal/util"
+	dtype "github.com/linecard/self/pkg/convention/deployment"
 	"github.com/linecard/self/pkg/sdk"
 
 	"github.com/charmbracelet/lipgloss/table"
@@ -73,6 +79,10 @@ func PublishRelease(ctx context.Context, api sdk.API, p *param.Publish) {
 }
 
 func DeployRelease(ctx context.Context, api sdk.API, p *param.Deploy) {
+	if p.Enable && p.Disable {
+		log.Fatal().Msg("enable and disable are mutually exclusive")
+	}
+
 	buildtime, err := api.Config.Find(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
@@ -86,6 +96,18 @@ func DeployRelease(ctx context.Context, api sdk.API, p *param.Deploy) {
 	deployment, err := api.Deployment.Deploy(ctx, release)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to deploy release")
+	}
+
+	if p.Enable {
+		if err = api.Subscription.EnableAll(ctx, deployment); err != nil {
+			log.Fatal().Err(err).Msg("failed to enable subscriptions")
+		}
+	}
+
+	if p.Disable {
+		if err = api.Subscription.DisableAll(ctx, deployment); err != nil {
+			log.Fatal().Err(err).Msg("failed to disable subscriptions")
+		}
 	}
 
 	if err = api.Subscription.Converge(ctx, deployment); err != nil {
@@ -138,9 +160,9 @@ func ListReleases(ctx context.Context, api sdk.API, p *param.Releases) {
 	for _, release := range releases {
 		t.Row(
 			release.Branch,
-			release.GitSha,
-			release.ImageDigest,
-			release.Released,
+			util.UnsafeSlice(release.GitSha, 0, 8),
+			util.UnsafeSlice(release.ImageDigest, 7, 15),
+			carbon.Parse(release.Released).DiffForHumans(),
 		)
 	}
 
@@ -148,6 +170,7 @@ func ListReleases(ctx context.Context, api sdk.API, p *param.Releases) {
 }
 
 func ListDeployments(ctx context.Context, api sdk.API, p *param.Deployments) {
+	var wg sync.WaitGroup
 	t := table.New()
 
 	branchFilter := api.Config.Resource.Namespace + "-" + api.Config.Git.Branch
@@ -156,17 +179,50 @@ func ListDeployments(ctx context.Context, api sdk.API, p *param.Deployments) {
 		log.Fatal().Err(err).Msg("failed to list deployments")
 	}
 
-	t.Headers("Deployment", "HEAD", "SHA", "DIGEST", "DEPLOYED")
+	t.Headers("Deployment", "HEAD", "SHA", "DIGEST", "ENABLED", "ROUTE", "DEPLOYED")
+
+	wg.Add(len(deployments))
 
 	for _, deployment := range deployments {
-		t.Row(
-			deployment.Tags["Function"],
-			deployment.Tags["Branch"],
-			deployment.Tags["Sha"],
-			"sha256:"+*deployment.Configuration.CodeSha256,
-			*deployment.Configuration.LastModified,
-		)
+		go func(each dtype.Deployment) {
+			defer wg.Done()
+			var enabled bool
+
+			subscriptions, err := api.Subscription.List(ctx, each)
+			if err != nil {
+				log.Fatal().Err(err).Msg("failed to list subscriptions")
+			}
+
+			for _, subscription := range subscriptions {
+				if subscription.Meta.Update {
+					enabled = subscription.Meta.Update
+					break
+				}
+			}
+
+			routes, err := api.Httproxy.UnsafeListRoutes(ctx, each)
+			if err != nil {
+				log.Fatal().Err(err).Msg("failed to list routes")
+			}
+
+			var routeKeys []string
+			for _, route := range routes {
+				routeKeys = append(routeKeys, *route.RouteKey)
+			}
+
+			t.Row(
+				each.Tags["Function"],
+				each.Tags["Branch"],
+				util.UnsafeSlice(each.Tags["Sha"], 0, 8),
+				util.UnsafeSlice(*each.Configuration.CodeSha256, 0, 8),
+				strconv.FormatBool(enabled),
+				strings.Join(routeKeys, ", "),
+				carbon.Parse(*each.Configuration.LastModified).DiffForHumans(),
+			)
+		}(deployment)
 	}
+
+	wg.Wait()
 
 	fmt.Println(t.Render())
 }

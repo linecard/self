@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -15,11 +16,12 @@ import (
 )
 
 const (
-	envEcrId     = "AWS_ECR_REGISTRY_ID"
-	envEcrRegion = "AWS_ECR_REGISTRY_REGION"
-	envGwId      = "AWS_API_GATEWAY_ID"
-	envSgIds     = "AWS_SECURITY_GROUP_IDS"
-	envSnIds     = "AWS_SUBNET_IDS"
+	envOwnerPrefix = "AWS_PREFIX_WITH_OWNER"
+	envEcrId       = "AWS_ECR_REGISTRY_ID"
+	envEcrRegion   = "AWS_ECR_REGISTRY_REGION"
+	envGwId        = "AWS_API_GATEWAY_ID"
+	envSgIds       = "AWS_SECURITY_GROUP_IDS"
+	envSnIds       = "AWS_SUBNET_IDS"
 )
 
 //go:embed embedded/*
@@ -146,8 +148,17 @@ func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClie
 	}
 
 	nameSpace := strings.TrimSuffix(c.Git.Origin.Path, ".git")
+
 	c.Repository.Namespace = strings.TrimPrefix(nameSpace, "/")
 	c.Resource.Namespace = util.DeSlasher(nameSpace)
+
+	// temporary backwards compatability envar
+	if value, exists := os.LookupEnv(envOwnerPrefix); exists {
+		if strings.ToLower(value) == "false" {
+			noOwner := strings.Split(c.Resource.Namespace, "-")[1:]
+			c.Resource.Namespace = strings.Join(noOwner, "-")
+		}
+	}
 
 	c.TemplateData.AccountId = c.Account.Id
 	c.TemplateData.Region = c.Account.Region

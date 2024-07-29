@@ -16,18 +16,20 @@ type Init struct {
 
 type Build struct {
 	SSHAgent bool   `arg:"-a,--ssh-agent" help:"mount ssh-agent into build (not yet implemented)"`
-	Context  string `arg:"-c,--build-context" help:"set builtime path"`
-	Run      bool   `arg:"-x,--run" help:"run the function locally after building"`
+	Context  string `arg:"-c,--build-context" help:"set builtime path, defaults to arg path."`
+	Run      bool   `arg:"--run" help:"run the function locally after building"`
 	FunctionArg
 }
 
 type Publish struct {
 	Login            bool `arg:"-l,--ecr-login" help:"Login to ECR"`
-	EnsureRepository bool `arg:"-e,--ensure-repository,env:DEFAULT_ENSURE_REPOSITORY"`
+	EnsureRepository bool `arg:"--ensure-repository" help:"Ensure ECR repository exists"`
 	Build
 }
 
 type Deploy struct {
+	Enable  bool `arg:"--enable" help:"enable event bus invocation"`
+	Disable bool `arg:"--disable" help:"disable event bus invocation"`
 	FunctionArg
 }
 
