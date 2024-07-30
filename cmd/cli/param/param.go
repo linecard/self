@@ -1,8 +1,18 @@
 package param
 
-type GitOpts struct {
-	Branch string `arg:"-b,--branch,env:DEFAULT_BRANCH"`
-	Sha    string `arg:"-s,--sha,env:DEFAULT_SHA"`
+type GlobalOpts struct {
+	Branch               string `arg:"--branch,env:GIT_BRANCH_OVERRIDE"`
+	Sha                  string `arg:"--sha,env:GIT_SHA_OVERRIDE"`
+	EcrId                string `arg:"--ecr-id,env:AWS_ECR_REGISTRY_ID"`
+	EcrRegion            string `arg:"--ecr-region,env:AWS_ECR_REGISTRY_REGION"`
+	ApiGatewayId         string `arg:"--api-gateway-id,env:AWS_API_GATEWAY_ID"`
+	SubnetIds            string `arg:"--subnet-ids,env:AWS_SUBNET_IDS"`
+	SecurityGroupIds     string `arg:"--security-group-ids,env:AWS_SECURITY_GROUP_IDS"`
+	OwnerPrefixResources bool   `arg:"--prefix-resources-with-owner,env:AWS_PREFIX_RESOURCES_WITH_OWNER"`
+	OwnerPrefixRoutes    bool   `arg:"--prefix-routes-with-owner,env:AWS_PREFIX_ROUTE_KEY_WITH_OWNER"`
+}
+
+type BuildTimeOpts struct {
 }
 
 type FunctionArg struct {

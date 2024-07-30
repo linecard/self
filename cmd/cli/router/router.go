@@ -12,7 +12,7 @@ import (
 )
 
 type Root struct {
-	param.GitOpts
+	param.GlobalOpts
 	Init        *param.Init        `arg:"subcommand:init" help:"Initialize a new function"`
 	Build       *param.Build       `arg:"subcommand:build" help:"Build a function"`
 	Releases    *param.Releases    `arg:"subcommand:releases" help:"List releases"`

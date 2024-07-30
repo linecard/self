@@ -129,15 +129,16 @@ func (resources *ComputedResources) Solve(repository Repository, git gitlib.DotG
 		Timeout:          3,
 		Http:             true,
 		Public:           false,
-		RouteKey:         "ANY /" + repository.Namespace + "/" + git.Branch + "/" + name,
 	}
 
-	// temporary backwards compatability envar
-	if value, exists := os.LookupEnv(envOwnerPrefix); exists {
-		if strings.ToLower(value) == "false" {
-			noOwner := strings.Split(repository.Namespace, "/")[1:]
-			defaults.RouteKey = "ANY /" + strings.Join(noOwner, "/") + "/" + git.Branch + "/" + name
+	if value, exists := os.LookupEnv(EnvOwnerPrefixRoutes); exists {
+		if strings.ToLower(value) == "true" {
+			defaults.RouteKey = "ANY /" + repository.Namespace + "/" + git.Branch + "/" + name
+
 		}
+	} else {
+		noOwner := strings.Split(repository.Namespace, "/")[1:]
+		defaults.RouteKey = "ANY /" + strings.Join(noOwner, "/") + "/" + git.Branch + "/" + name
 	}
 
 	// Start with the default values

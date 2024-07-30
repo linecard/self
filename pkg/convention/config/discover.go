@@ -36,17 +36,17 @@ func (c *Config) DiscoverCaller(ctx context.Context, client STSClient, awsConfig
 	return nil
 }
 
-func (c *Config) DiscoverRegistry(ctx context.Context, ecrEnvar, regionEnvar string, ecrFallback ECRClient, regionFallback aws.Config) (err error) {
+func (c *Config) DiscoverRegistry(ctx context.Context, ecrFallback ECRClient, regionFallback aws.Config) (err error) {
 	var req *ecr.DescribeRegistryInput
 	var res *ecr.DescribeRegistryOutput
 
-	if region, exists := os.LookupEnv(regionEnvar); exists {
+	if region, exists := os.LookupEnv(EnvEcrRegion); exists {
 		c.Registry.Region = region
 	} else {
 		c.Registry.Region = regionFallback.Region
 	}
 
-	if id, exists := os.LookupEnv(ecrEnvar); exists {
+	if id, exists := os.LookupEnv(EnvEcrId); exists {
 		c.Registry.Id = id
 	} else {
 		res, err = ecrFallback.DescribeRegistry(ctx, req)
@@ -61,23 +61,23 @@ func (c *Config) DiscoverRegistry(ctx context.Context, ecrEnvar, regionEnvar str
 	return nil
 }
 
-func (c *Config) DiscoverGateway(ctx context.Context, envar string) (err error) {
-	if gwId, exists := os.LookupEnv(envar); exists {
+func (c *Config) DiscoverGateway(ctx context.Context) (err error) {
+	if gwId, exists := os.LookupEnv(EnvGwId); exists {
 		c.ApiGateway.Id = &gwId
 	}
 	return nil
 }
 
-func (c *Config) DiscoverVpc(ctx context.Context, sgEnvar, snEnvar string) (err error) {
+func (c *Config) DiscoverVpc(ctx context.Context) (err error) {
 	var count int
 
-	if sgIds, sgExists := os.LookupEnv(sgEnvar); sgExists {
+	if sgIds, sgExists := os.LookupEnv(EnvSgIds); sgExists {
 		splitIds := strings.Split(sgIds, ",")
 		c.Vpc.SecurityGroupIds = splitIds
 		count++
 	}
 
-	if snIds, snExists := os.LookupEnv(snEnvar); snExists {
+	if snIds, snExists := os.LookupEnv(EnvSnIds); snExists {
 		splitIds := strings.Split(snIds, ",")
 		c.Vpc.SubnetIds = splitIds
 		count++
@@ -94,6 +94,15 @@ func (c *Config) DiscoverGit(ctx context.Context) (err error) {
 	if c.Git, err = gitlib.FromCwd(); err != nil {
 		return err
 	}
+
+	if value, exists := os.LookupEnv(EnvGitBranch); exists {
+		c.Git.Branch = value
+	}
+
+	if value, exists := os.LookupEnv(EnvGitSha); exists {
+		c.Git.Sha = value
+	}
+
 	return err
 }
 

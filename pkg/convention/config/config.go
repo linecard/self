@@ -16,12 +16,15 @@ import (
 )
 
 const (
-	envOwnerPrefix = "AWS_PREFIX_WITH_OWNER"
-	envEcrId       = "AWS_ECR_REGISTRY_ID"
-	envEcrRegion   = "AWS_ECR_REGISTRY_REGION"
-	envGwId        = "AWS_API_GATEWAY_ID"
-	envSgIds       = "AWS_SECURITY_GROUP_IDS"
-	envSnIds       = "AWS_SUBNET_IDS"
+	EnvGitBranch            = "GIT_BRANCH_OVERRIDE"
+	EnvGitSha               = "GIT_SHA_OVERRIDE"
+	EnvOwnerPrefixResources = "AWS_PREFIX_RESOURCES_WITH_OWNER"
+	EnvOwnerPrefixRoutes    = "AWS_PREFIX_ROUTE_KEY_WITH_OWNER"
+	EnvEcrId                = "AWS_ECR_REGISTRY_ID"
+	EnvEcrRegion            = "AWS_ECR_REGISTRY_REGION"
+	EnvGwId                 = "AWS_API_GATEWAY_ID"
+	EnvSgIds                = "AWS_SECURITY_GROUP_IDS"
+	EnvSnIds                = "AWS_SUBNET_IDS"
 )
 
 //go:embed embedded/*
@@ -131,15 +134,15 @@ func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClie
 		return
 	}
 
-	if err = c.DiscoverRegistry(ctx, envEcrId, envEcrRegion, ecrc, awsConfig); err != nil {
+	if err = c.DiscoverRegistry(ctx, ecrc, awsConfig); err != nil {
 		return
 	}
 
-	if err = c.DiscoverGateway(ctx, envGwId); err != nil {
+	if err = c.DiscoverGateway(ctx); err != nil {
 		return
 	}
 
-	if err = c.DiscoverVpc(ctx, envSgIds, envSnIds); err != nil {
+	if err = c.DiscoverVpc(ctx); err != nil {
 		return
 	}
 
@@ -148,16 +151,16 @@ func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClie
 	}
 
 	nameSpace := strings.TrimSuffix(c.Git.Origin.Path, ".git")
-
 	c.Repository.Namespace = strings.TrimPrefix(nameSpace, "/")
-	c.Resource.Namespace = util.DeSlasher(nameSpace)
 
 	// temporary backwards compatability envar
-	if value, exists := os.LookupEnv(envOwnerPrefix); exists {
-		if strings.ToLower(value) == "false" {
-			noOwner := strings.Split(c.Resource.Namespace, "-")[1:]
-			c.Resource.Namespace = strings.Join(noOwner, "-")
+	if value, exists := os.LookupEnv(EnvOwnerPrefixResources); exists {
+		if strings.ToLower(value) == "true" {
+			c.Resource.Namespace = util.DeSlasher(nameSpace)
 		}
+	} else {
+		noOwner := strings.Split(util.DeSlasher(nameSpace), "-")[1:]
+		c.Resource.Namespace = strings.Join(noOwner, "-")
 	}
 
 	c.TemplateData.AccountId = c.Account.Id
@@ -173,15 +176,15 @@ func (c *Config) FromEvent(ctx context.Context, awsConfig aws.Config, ecrc ECRCl
 		return
 	}
 
-	if err = c.DiscoverRegistry(ctx, envEcrId, envEcrRegion, ecrc, awsConfig); err != nil {
+	if err = c.DiscoverRegistry(ctx, ecrc, awsConfig); err != nil {
 		return
 	}
 
-	if err = c.DiscoverGateway(ctx, envGwId); err != nil {
+	if err = c.DiscoverGateway(ctx); err != nil {
 		return
 	}
 
-	if err = c.DiscoverVpc(ctx, envSgIds, envSnIds); err != nil {
+	if err = c.DiscoverVpc(ctx); err != nil {
 		return
 	}
 

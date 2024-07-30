@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"os"
+	"strconv"
 
 	"github.com/alexflint/go-arg"
 	"github.com/linecard/self/cmd/cli/router"
@@ -45,18 +46,46 @@ func Invoke(ctx context.Context) {
 	var root router.Root
 	arg.MustParse(&root)
 
+	if root.GlobalOpts.Branch != "" {
+		os.Setenv(config.EnvGitBranch, root.GlobalOpts.Branch)
+	}
+
+	if root.GlobalOpts.Sha != "" {
+		os.Setenv(config.EnvGitSha, root.GlobalOpts.Sha)
+	}
+
+	if root.GlobalOpts.EcrId != "" {
+		os.Setenv(config.EnvEcrId, root.GlobalOpts.EcrId)
+	}
+
+	if root.GlobalOpts.EcrRegion != "" {
+		os.Setenv(config.EnvEcrRegion, root.GlobalOpts.EcrRegion)
+	}
+
+	if root.GlobalOpts.SubnetIds != "" {
+		os.Setenv(config.EnvSnIds, root.GlobalOpts.SubnetIds)
+	}
+
+	if root.GlobalOpts.SecurityGroupIds != "" {
+		os.Setenv(config.EnvSgIds, root.GlobalOpts.SecurityGroupIds)
+	}
+
+	if root.GlobalOpts.OwnerPrefixResources {
+		os.Setenv(
+			config.EnvOwnerPrefixResources,
+			strconv.FormatBool(root.GlobalOpts.OwnerPrefixResources),
+		)
+	}
+
+	if root.GlobalOpts.OwnerPrefixRoutes {
+		os.Setenv(
+			config.EnvOwnerPrefixRoutes,
+			strconv.FormatBool(root.GlobalOpts.OwnerPrefixRoutes),
+		)
+	}
+
 	if err := cfg.FromCwd(ctx, awsConfig, ecrc, stsc); err != nil {
 		log.Fatal().Err(err).Msg("failed to load configuration from cwd")
-	}
-
-	// Override branch if provided
-	if root.GitOpts.Branch != "" {
-		cfg.Git.Branch = root.GitOpts.Branch
-	}
-
-	// Override sha if provided
-	if root.GitOpts.Sha != "" {
-		cfg.Git.Sha = root.GitOpts.Sha
 	}
 
 	if api, err = sdk.Init(ctx, awsConfig, cfg); err != nil {
