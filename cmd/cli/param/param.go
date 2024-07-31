@@ -63,7 +63,10 @@ type BuildTime struct {
 	FunctionArg
 }
 
+type GlobalConfig struct{}
+
 type Inspect struct {
-	Build  *BuildTime  `arg:"subcommand:build" help:"View encoded buildtime config"`
-	Deploy *DeployTime `arg:"subcommand:deploy" help:"View parsed deploytime config"`
+	Build  *BuildTime    `arg:"subcommand:build" help:"print buildtime config for given function"`
+	Deploy *DeployTime   `arg:"subcommand:deploy" help:"print deploytime config for given function"`
+	Global *GlobalConfig `arg:"subcommand:global" help:"print global config for repository"`
 }

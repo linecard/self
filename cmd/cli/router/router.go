@@ -54,6 +54,9 @@ func (c Root) Route(ctx context.Context, api sdk.API) {
 		case c.Inspect.Deploy != nil:
 			method.PrintDeployTime(ctx, api, c.Inspect.Deploy)
 
+		case c.Inspect.Global != nil:
+			method.PrintGlobalConfig(ctx, api)
+
 		default:
 			arg.MustParse(&c).WriteHelpForSubcommand(os.Stdout, "inspect")
 		}

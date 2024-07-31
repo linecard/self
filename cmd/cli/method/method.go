@@ -227,6 +227,15 @@ func ListDeployments(ctx context.Context, api sdk.API, p *param.Deployments) {
 	fmt.Println(t.Render())
 }
 
+func PrintGlobalConfig(ctx context.Context, api sdk.API) {
+	cJson, err := json.Marshal(api.Config)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to marshal config")
+	}
+
+	fmt.Println(string(cJson))
+}
+
 func PrintDeployTime(ctx context.Context, api sdk.API, p *param.DeployTime) {
 	buildtime, err := api.Config.Find(p.FunctionArg.Path)
 	if err != nil {
