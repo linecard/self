@@ -74,6 +74,8 @@ describe "Deployment" do
 end
 
 
+# Need to create eventbridge spec matchers in awspec fork
+
 # def buses(path)
 #   directory_pattern = "#{path}/*/*.*"
 #   regex = %r{#{path}/([^/]+)/([^/]+)\.[^/]+}
