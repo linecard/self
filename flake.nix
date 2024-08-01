@@ -31,6 +31,8 @@
             go-tools
             gotools
             gopls
+            ruby
+            bundler
           ];
 
           AWS_REGION = "us-west-2";

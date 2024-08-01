@@ -1,0 +1,19 @@
+[private]
+default:
+    just --list
+
+init lang:
+    self init {{ lang }} init/testing-{{ lang }}
+
+publish lang:
+    self publish init/testing-{{ lang }} --ecr-login
+
+deploy lang:
+    self deploy init/testing-{{ lang }}
+
+test lang:
+    FUNCTION_PATH=init/testing-{{lang}} bundler exec -- rspec -f d
+
+clean:
+    rm -rf e2e/init/testing*
+

@@ -125,7 +125,8 @@ func (c *Config) DiscoverSelfish(ctx context.Context) (err error) {
 			return err
 		}
 
-		if info.IsDir() && selfish(path) {
+		selfRepoEmbedded := "self/pkg/convention/config/embedded/scaffold/"
+		if info.IsDir() && selfish(path) && !strings.Contains(path, selfRepoEmbedded) {
 			abs, err := filepath.Abs(path)
 			if err != nil {
 				return err
