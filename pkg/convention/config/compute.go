@@ -133,12 +133,12 @@ func (resources *ComputedResources) Solve(repository Repository, git gitlib.DotG
 
 	if value, exists := os.LookupEnv(EnvOwnerPrefixRoutes); exists {
 		if strings.ToLower(value) == "true" {
-			defaults.RouteKey = "ANY /" + repository.Namespace + "/" + git.Branch + "/" + name
+			defaults.RouteKey = "ANY /" + repository.Namespace + "/" + git.Branch + "/" + name + "/{proxy+}"
 
 		}
 	} else {
 		noOwner := strings.Split(repository.Namespace, "/")[1:]
-		defaults.RouteKey = "ANY /" + strings.Join(noOwner, "/") + "/" + git.Branch + "/" + name
+		defaults.RouteKey = "ANY /" + strings.Join(noOwner, "/") + "/" + git.Branch + "/" + name + "/{proxy+}"
 	}
 
 	// Start with the default values

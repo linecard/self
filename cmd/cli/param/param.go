@@ -12,16 +12,13 @@ type GlobalOpts struct {
 	OwnerPrefixRoutes    bool   `arg:"--prefix-routes-with-owner,env:AWS_PREFIX_ROUTE_KEY_WITH_OWNER"`
 }
 
-type BuildTimeOpts struct {
-}
-
 type FunctionArg struct {
 	Path string `arg:"positional" help:"path to function" default:"."`
 }
 
 type Init struct {
-	Language string `arg:"positional" help:"Language to scaffold"`
-	Name     string `arg:"positional" help:"Name of function"`
+	Scaffold string `arg:"positional,required" help:"python, go, or self"`
+	Name     string `arg:"positional,required" help:"Release name"`
 }
 
 type Build struct {
@@ -34,12 +31,13 @@ type Build struct {
 type Publish struct {
 	Login            bool `arg:"-l,--ecr-login" help:"Login to ECR"`
 	EnsureRepository bool `arg:"--ensure-repository" help:"Ensure ECR repository exists"`
+	Force            bool `arg:"-f,--force" help:"Override dirty commit protection"`
 	Build
 }
 
 type Deploy struct {
-	Enable  bool `arg:"--enable" help:"enable event bus invocation"`
-	Disable bool `arg:"--disable" help:"disable event bus invocation"`
+	Enable  bool `arg:"--enable,env:ENABLE_EVENTING_ON_DEPLOY" help:"enable event bus invocation"`
+	Disable bool `arg:"--disable,env:DISABLE_EVENTING_ON_DEPLOY" help:"disable event bus invocation"`
 	FunctionArg
 }
 

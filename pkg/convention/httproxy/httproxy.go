@@ -110,7 +110,7 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 		*c.Config.ApiGateway.Id,
 		*integration.IntegrationId,
 		deploytime.Computed.Resources.RouteKey,
-		deploytime.Computed.Resources.Public,
+		!deploytime.Computed.Resources.Public, // TODO: switch to better auth config
 	)
 
 	if err != nil {

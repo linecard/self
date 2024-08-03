@@ -19,7 +19,7 @@ import (
 )
 
 func InitFunction(ctx context.Context, api sdk.API, p *param.Init) {
-	if err := api.Account.Config.Scaffold(p.Language, p.Name); err != nil {
+	if err := api.Account.Config.Scaffold(p.Scaffold, p.Name); err != nil {
 		log.Fatal().Err(err).Msg("failed to scaffold function")
 	}
 }
@@ -71,6 +71,10 @@ func PublishRelease(ctx context.Context, api sdk.API, p *param.Publish) {
 		if err := api.Release.EnsureRepository(ctx, buildtime.Computed.Repository.Name); err != nil {
 			log.Fatal().Err(err).Msg("failed to ensure ECR repository")
 		}
+	}
+
+	if api.Config.Git.Dirty && !p.Force {
+		log.Fatal().Msg("git is dirty, please commit changes before publishing")
 	}
 
 	if err := api.Release.Publish(ctx, image); err != nil {

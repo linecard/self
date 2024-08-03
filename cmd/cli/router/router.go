@@ -13,12 +13,12 @@ import (
 
 type Root struct {
 	param.GlobalOpts
-	Init        *param.Init        `arg:"subcommand:init" help:"Initialize a new function"`
-	Build       *param.Build       `arg:"subcommand:build" help:"Build a function"`
-	Releases    *param.Releases    `arg:"subcommand:releases" help:"List releases"`
+	Init        *param.Init        `arg:"subcommand:init" help:"Initialize a scaffold"`
+	Build       *param.Build       `arg:"subcommand:build" help:"Build a release"`
+	Publish     *param.Publish     `arg:"subcommand:publish" help:"Publish a release"`
 	Deploy      *param.Deploy      `arg:"subcommand:deploy" help:"Deploy a release"`
 	Destroy     *param.Destroy     `arg:"subcommand:destroy" help:"Destroy a release deployment"`
-	Publish     *param.Publish     `arg:"subcommand:publish" help:"Publish a release"`
+	Releases    *param.Releases    `arg:"subcommand:releases" help:"List releases"`
 	Deployments *param.Deployments `arg:"subcommand:deployments" help:"List release deployments"`
 	Inspect     *param.Inspect     `arg:"subcommand:inspect" help:"Inspect config"`
 }
