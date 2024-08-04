@@ -9,7 +9,7 @@ init lang:
     cp -r fixtures/bus init/testing-{{ lang }}/
 
 publish lang:
-    self publish init/testing-{{ lang }} --ecr-login --ensure-repository
+    self publish init/testing-{{ lang }} --ecr-login
 
 deploy lang:
     self deploy init/testing-{{ lang }}
@@ -22,4 +22,19 @@ destroy lang:
 
 clean lang:
     rm -rf init/testing-{{ lang }}
+
+up:
+    #! /usr/bin/env bash
+    for lang in ruby python node go; do
+        just init $lang
+        just publish $lang
+        just deploy $lang
+    done
+
+down:
+    #! /usr/bin/env bash
+    for lang in ruby python node go; do
+        just destroy $lang
+        just clean $lang
+    done
 
