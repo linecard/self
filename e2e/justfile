@@ -1,3 +1,5 @@
+export AWS_API_GATEWAY_ID := "vas86x7yjc"
+
 [private]
 default:
     just --list

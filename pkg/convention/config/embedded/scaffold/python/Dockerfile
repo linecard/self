@@ -7,4 +7,4 @@ RUN pip install fastapi uvicorn
 COPY main.py .
 
 ENV AWS_LWA_PORT=8081
-ENTRYPOINT [ "uvicorn", "main:app" ]
+ENTRYPOINT [ "python", "main.py" ]
