@@ -6,4 +6,5 @@ WORKDIR /var/task
 RUN npm install express
 COPY main.js .
 
+ENV AWS_LWA_PORT=8081
 ENTRYPOINT [ "node", "main.js" ]

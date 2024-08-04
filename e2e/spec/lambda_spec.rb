@@ -98,9 +98,14 @@ describe name do
       end
 
       describe "GET #{url}" do
-        it "should return 200", retry: 10 do
+        it "authenticated: return 200", retry: 10 do
           response = sigv4_get_request(url)
           expect(response.code).to eq("200")
+        end
+
+        it "unauthenticated: return 403", retry: 10 do
+          response = Net::HTTP.get_response(URI(url))
+          expect(response.code).to eq("403")
         end
       end
     end
