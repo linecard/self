@@ -19,5 +19,5 @@ destroy lang:
     self destroy init/testing-{{ lang }}
 
 clean lang:
-    rm -rf e2e/init/testing-{{ lang }}
+    rm -rf init/testing-{{ lang }}
 
