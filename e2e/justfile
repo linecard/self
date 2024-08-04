@@ -31,6 +31,12 @@ up:
         just deploy $lang
     done
 
+smoke:
+    #! /usr/bin/env bash
+    for lang in ruby python node go; do
+        just test $lang
+    done
+
 down:
     #! /usr/bin/env bash
     for lang in ruby python node go; do

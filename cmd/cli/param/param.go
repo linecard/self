@@ -17,7 +17,7 @@ type FunctionArg struct {
 }
 
 type Init struct {
-	Scaffold string `arg:"positional,required" help:"go, python, node, ruby, bash or self"`
+	Scaffold string `arg:"positional,required" help:"go, python, node, ruby or self"`
 	Name     string `arg:"positional,required" help:"Release name"`
 }
 

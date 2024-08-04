@@ -1,7 +1,9 @@
 FROM golang:alpine3.20 as build
-RUN go get -u github.com/gin-gonic/gin
 WORKDIR /src
 COPY main.go .
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
 RUN GOOS=linux CGO_ENABLED=0 go build main.go
 
 FROM scratch
