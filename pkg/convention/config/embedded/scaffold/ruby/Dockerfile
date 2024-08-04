@@ -1,9 +1,9 @@
-FROM python:alpine3.20
+FROM ruby:3.2.5
 
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
 ENV AWS_LWA_PORT=8080
 
-RUN pip install fastapi uvicorn
+RUN gem install sinatra --no-document
 
 WORKDIR /var/task
 COPY main.py .

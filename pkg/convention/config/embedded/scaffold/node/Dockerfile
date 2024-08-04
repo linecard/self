@@ -1,7 +1,10 @@
 FROM node
-COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.3 /lambda-adapter /opt/extensions/lambda-adapter
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
 ENV AWS_LWA_PORT=8080
 
-COPY index.js /var/task/index.js
+RUN npm install express
 
-ENTRYPOINT [ "node", "var/task/index.js" ]
+WORKDIR /var/task
+COPY main.js .
+
+ENTRYPOINT [ "node", "main.js" ]
