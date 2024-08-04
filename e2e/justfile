@@ -7,7 +7,7 @@ init lang:
     cp -r fixtures/bus init/testing-{{ lang }}/
 
 publish lang:
-    self publish init/testing-{{ lang }} --ecr-login
+    self publish init/testing-{{ lang }} --ecr-login --ensure-repository
 
 deploy lang:
     self deploy init/testing-{{ lang }}

@@ -6,6 +6,6 @@ ENV AWS_LWA_PORT=8080
 RUN gem install sinatra --no-document
 
 WORKDIR /var/task
-COPY main.py .
+COPY main.rb .
 
-ENTRYPOINT [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+ENTRYPOINT [ "ruby", "main.rb" ]
