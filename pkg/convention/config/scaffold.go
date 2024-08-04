@@ -15,6 +15,7 @@ func (c Config) Scaffold(templateName, functionName string) error {
 
 	if _, err := embedded.ReadDir(templatePath); os.IsNotExist(err) {
 		templates, err := embedded.ReadDir(scaffoldPath)
+		fmt.Println(templates)
 		if err != nil {
 			return err
 		}

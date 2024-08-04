@@ -1,9 +1,8 @@
 FROM golang:alpine3.20 as build
 WORKDIR /src
 COPY main.go .
-COPY go.mod .
-COPY go.sum .
-RUN go mod download
+RUN go mod init headers
+RUN go mod tidy
 RUN GOOS=linux CGO_ENABLED=0 go build main.go
 
 FROM scratch
