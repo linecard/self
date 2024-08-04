@@ -76,9 +76,9 @@ func ensureRieBinary(homeDir string) (string, error) {
 
 	switch runtime.GOARCH {
 	case "amd64", "x86_64":
-		rieUrl = "https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/download/v1.18/aws-lambda-rie-x86_64"
+		rieUrl = "https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/download/v1.21/aws-lambda-rie-x86_64"
 	case "arm64", "aarch64":
-		rieUrl = "https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/download/v1.18/aws-lambda-rie-arm64"
+		rieUrl = "https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/download/v1.21/aws-lambda-rie-arm64"
 	default:
 		return "", fmt.Errorf("unsupported architecture: %s", runtime.GOARCH)
 	}

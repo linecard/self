@@ -8,10 +8,6 @@ app.get('/', (req, res) => {
   res.json(req.headers);
 });
 
-app.get('/healthz', (req, res) => {
-  res.json({ status: 'healthy' });
-});
-
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
