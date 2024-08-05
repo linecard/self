@@ -15,7 +15,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.6
 	github.com/aws/smithy-go v1.20.2
 	github.com/charmbracelet/lipgloss v0.12.1
-	github.com/docker/docker v26.1.0+incompatible
+	github.com/docker/docker v26.1.4+incompatible
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/golang-module/carbon/v2 v2.3.12
 	github.com/rs/zerolog v1.33.0
