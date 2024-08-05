@@ -1,17 +1,29 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
+	"os"
+
+	"github.com/gin-gonic/gin"
 )
 
-func handler(w http.ResponseWriter, r *http.Request) {
-	headers, _ := json.Marshal(r.Header)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(headers)
-}
-
 func main() {
-	http.HandleFunc("/", handler)
-	http.ListenAndServe(":8080", nil)
+	var listen string
+	router := gin.Default()
+
+	if value, exists := os.LookupEnv("AWS_LWA_PORT"); exists {
+		listen = "0.0.0.0:" + value
+	} else {
+		listen = "0.0.0.0:8081"
+	}
+
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, c.Request.Header)
+	})
+
+	router.NoRoute(func(c *gin.Context) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+	})
+
+	router.Run(listen)
 }

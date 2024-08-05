@@ -10,6 +10,7 @@ import (
 	"github.com/linecard/self/pkg/convention/config"
 
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
+	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/smithy-go"
 	"github.com/docker/docker/api/types"
 	"github.com/golang-module/carbon/v2"
@@ -18,11 +19,11 @@ import (
 )
 
 type RegistryService interface {
-	InspectByTag(ctx context.Context, registryId, repository, tag string) (types.ImageInspect, error)
-	ImageUri(ctx context.Context, registryId, registryUrl, repository, tag string) (string, error)
-	List(ctx context.Context, registryId, repository string) (ecr.DescribeImagesOutput, error)
-	Delete(ctx context.Context, registryId, repository string, imageDigests []string) error
-	Untag(ctx context.Context, registryId, repository, tag string) error
+	InspectByTag(ctx context.Context, registryId, repositoryName, tag string) (types.ImageInspect, error)
+	ImageUri(ctx context.Context, registryId, registryUrl, repositoryName, tag string) (string, error)
+	List(ctx context.Context, registryId, repositoryName string) (ecr.DescribeImagesOutput, error)
+	Delete(ctx context.Context, registryId, repositoryName string, imageDigests []string) error
+	Untag(ctx context.Context, registryId, repositoryName, tag string) error
 	PutRepository(ctx context.Context, repositoryName string) error
 }
 
@@ -38,7 +39,8 @@ type Image struct {
 
 type Release struct {
 	Image
-	Uri string
+	Uri             string
+	AWSArchitecture []lambdatypes.Architecture
 }
 
 type ReleaseSummary struct {
@@ -68,33 +70,42 @@ func FromServices(c config.Config, r RegistryService, b BuildService) Convention
 	}
 }
 
-func (c Convention) Find(ctx context.Context, tag string) (Release, error) {
+func (c Convention) Find(ctx context.Context, repositoryName, tag string) (Release, error) {
 	ctx, span := otel.Tracer("").Start(ctx, "release.Find")
 	defer span.End()
 
-	repository := c.Config.Repository.Prefix + "/" + c.Config.Function.Name
-	inspect, err := c.Service.Registry.InspectByTag(ctx, c.Config.Registry.Id, repository, tag)
-
+	inspect, err := c.Service.Registry.InspectByTag(ctx, c.Config.Registry.Id, repositoryName, tag)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err
 	}
 
-	uri, err := c.Service.Registry.ImageUri(ctx, c.Config.Registry.Id, c.Config.Registry.Url, repository, tag)
+	uri, err := c.Service.Registry.ImageUri(ctx, c.Config.Registry.Id, c.Config.Registry.Url, repositoryName, tag)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err
 	}
 
-	return Release{Image{inspect}, uri}, nil
+	var awsArch []lambdatypes.Architecture
+	switch inspect.Architecture {
+	case "arm64":
+		awsArch = append(awsArch, "arm64")
+	case "amd64":
+		awsArch = append(awsArch, "x86_64")
+	case "x86_64":
+		awsArch = append(awsArch, "x86_64")
+	default:
+		return Release{}, fmt.Errorf("unsupported architecture %s", inspect.Architecture)
+	}
+
+	return Release{Image{inspect}, uri, awsArch}, nil
 }
 
-func (c Convention) List(ctx context.Context, function string) ([]ReleaseSummary, error) {
+func (c Convention) List(ctx context.Context, repositoryName string) ([]ReleaseSummary, error) {
 	var releases []ReleaseSummary
 	var apiErr smithy.APIError
-	repository := c.Config.Repository.Prefix + "/" + function
 
-	list, err := c.Service.Registry.List(ctx, c.Config.Registry.Url, repository)
+	list, err := c.Service.Registry.List(ctx, c.Config.Registry.Url, repositoryName)
 	if errors.As(err, &apiErr) {
 		switch apiErr.ErrorCode() {
 		case "RepositoryNotFoundException":
@@ -121,8 +132,77 @@ func (c Convention) List(ctx context.Context, function string) ([]ReleaseSummary
 	return releases, nil
 }
 
-func (c Convention) GcPlan(ctx context.Context, functionName string) ([]ReleaseSummary, []string, error) {
-	releases, err := c.List(ctx, functionName)
+func (c Convention) Build(ctx context.Context, path, context string) (Image, config.BuildTime, error) {
+	buildtime, err := c.Config.Find(path)
+	if err != nil {
+		return Image{}, buildtime, err
+	}
+
+	tags := []string{ // make this a part of computed.
+		fmt.Sprintf("%s:%s",
+			buildtime.Computed.Repository.Url,
+			buildtime.Branch.Decoded,
+		),
+		fmt.Sprintf("%s:%s",
+			buildtime.Computed.Repository.Url,
+			buildtime.Sha.Decoded,
+		),
+	}
+
+	err = c.Service.Build.Build(
+		ctx,
+		path,
+		context,
+		buildtime.EncodedLabels(),
+		tags,
+	)
+
+	if err != nil {
+		return Image{}, buildtime, err
+	}
+
+	inspect, err := c.Service.Build.InspectByTag(
+		ctx,
+		buildtime.Computed.Registry.Url,
+		buildtime.Computed.Repository.Name,
+		buildtime.Sha.Decoded,
+	)
+
+	if err != nil {
+		return Image{}, buildtime, err
+	}
+
+	return Image{inspect}, buildtime, nil
+}
+
+func (c Convention) Publish(ctx context.Context, i Image) error {
+	// This is a very fuzzy validation. Catches issues with messy commits and mutable tagging ecr-side.
+	if len(i.RepoTags) != 2 {
+		for _, tag := range i.RepoTags {
+			fmt.Println(tag)
+		}
+		return fmt.Errorf("image must have exactly two tags, was given %d, do you have any identical builds?", len(i.RepoTags))
+	}
+
+	for _, tag := range i.RepoTags {
+		if err := c.Service.Build.Push(ctx, tag); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c Convention) Untag(ctx context.Context, repositoryName, tag string) error {
+	return c.Service.Registry.Untag(ctx, c.Config.Registry.Id, repositoryName, tag)
+}
+
+func (c Convention) EnsureRepository(ctx context.Context, repositoryName string) error {
+	return c.Service.Registry.PutRepository(ctx, repositoryName)
+}
+
+func (c Convention) GcPlan(ctx context.Context, repositoryName string) ([]ReleaseSummary, []string, error) {
+	releases, err := c.List(ctx, repositoryName)
 	if err != nil {
 		return []ReleaseSummary{}, []string{}, err
 	}
@@ -147,62 +227,6 @@ func (c Convention) GcPlan(ctx context.Context, functionName string) ([]ReleaseS
 	return saveDigests, deleteDigests, nil
 }
 
-func (c Convention) GcApply(ctx context.Context, functionName string, digests []string) error {
-	repository := c.Config.Repository.Prefix + "/" + functionName
-	return c.Service.Registry.Delete(ctx, c.Config.Registry.Id, repository, digests)
-}
-
-func (c Convention) Publish(ctx context.Context, i Image) error {
-	// This is a very fuzzy validation. Long run we wont need it. Nice to catch blatant problems for now.
-	if len(i.RepoTags) != 2 {
-		for _, tag := range i.RepoTags {
-			fmt.Println(tag)
-		}
-		return fmt.Errorf("image must have exactly two tags, was given %d, do you have any identical builds?", len(i.RepoTags))
-	}
-
-	for _, tag := range i.RepoTags {
-		if err := c.Service.Build.Push(ctx, tag); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (c Convention) Build(ctx context.Context, functionPath, contextPath, branch, sha string) (Image, error) {
-	registryUrl := c.Config.Registry.Url
-	repository := c.Config.Repository.Prefix + "/" + c.Config.Function.Name
-
-	// coerce label sha to given sha
-	labels, err := c.Config.Labels.Encode(&sha)
-	if err != nil {
-		return Image{}, err
-	}
-
-	tags := []string{
-		fmt.Sprintf("%s/%s:%s", registryUrl, repository, branch),
-		fmt.Sprintf("%s/%s:%s", registryUrl, repository, sha),
-	}
-
-	if err := c.Service.Build.Build(ctx, functionPath, contextPath, labels, tags); err != nil {
-		return Image{}, err
-	}
-
-	imageInspect, err := c.Service.Build.InspectByTag(ctx, registryUrl, repository, sha)
-	if err != nil {
-		return Image{}, err
-	}
-
-	return Image{imageInspect}, nil
-}
-
-func (c Convention) Untag(ctx context.Context, tag string) error {
-	repository := c.Config.Repository.Prefix + "/" + c.Config.Function.Name
-	return c.Service.Registry.Untag(ctx, c.Config.Registry.Id, repository, tag)
-}
-
-func (c Convention) EnsureRepository(ctx context.Context) error {
-	repositoryName := c.Config.Repository.Prefix + "/" + c.Config.Function.Name
-	return c.Service.Registry.PutRepository(ctx, repositoryName)
+func (c Convention) GcApply(ctx context.Context, repositoryName string, digests []string) error {
+	return c.Service.Registry.Delete(ctx, c.Config.Registry.Id, repositoryName, digests)
 }

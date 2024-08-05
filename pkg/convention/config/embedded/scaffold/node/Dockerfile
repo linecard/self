@@ -1,10 +1,10 @@
-FROM python:alpine3.20
+FROM node:lts-alpine
 
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
 
 WORKDIR /var/task
-RUN pip install fastapi uvicorn
-COPY main.py .
+RUN npm install express
+COPY main.js .
 
 ENV AWS_LWA_PORT=8081
-ENTRYPOINT [ "python", "main.py" ]
+ENTRYPOINT [ "node", "main.js" ]

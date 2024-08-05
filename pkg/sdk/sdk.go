@@ -57,20 +57,31 @@ type Conventions struct {
 	Httproxy     httproxy.Convention
 }
 
-type API = Conventions
+type API struct {
+	Conventions
+	Config config.Config
+}
 
-func Init(ctx context.Context, awsConfig aws.Config, config config.Config) (Conventions, error) {
+func Init(ctx context.Context, awsConfig aws.Config, config config.Config) (API, error) {
 	clients, err := InitClients(ctx, awsConfig)
 	if err != nil {
-		return Conventions{}, err
+		return API{}, err
 	}
 
 	services, err := InitServices(ctx, clients)
 	if err != nil {
-		return Conventions{}, err
+		return API{}, err
 	}
 
-	return InitConventions(ctx, config, services)
+	conventions, err := InitConventions(ctx, config, services)
+	if err != nil {
+		return API{}, err
+	}
+
+	return API{
+		Conventions: conventions,
+		Config:      config,
+	}, nil
 }
 
 func InitConventions(ctx context.Context, config config.Config, services Services) (Conventions, error) {

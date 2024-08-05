@@ -2,15 +2,11 @@ package deployment
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/release"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -18,6 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	dockerTypes "github.com/docker/docker/api/types"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type FunctionService interface {
@@ -64,12 +62,11 @@ func FromServices(c config.Config, f FunctionService, r RegistryService) Convent
 	}
 }
 
-func (c Convention) Find(ctx context.Context, namespace, functionName string) (Deployment, error) {
+func (c Convention) Find(ctx context.Context, deploymentName string) (Deployment, error) {
 	ctx, span := otel.Tracer("").Start(ctx, "deployment.Find")
 	defer span.End()
 
-	resource := c.Config.ResourceName(namespace, functionName)
-	lambda, err := c.Service.Function.Inspect(ctx, resource)
+	lambda, err := c.Service.Function.Inspect(ctx, deploymentName)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
@@ -78,9 +75,9 @@ func (c Convention) Find(ctx context.Context, namespace, functionName string) (D
 	return Deployment{*lambda}, nil
 }
 
-func (c Convention) List(ctx context.Context) ([]Deployment, error) {
+func (c Convention) List(ctx context.Context, deploymentPrefix string) ([]Deployment, error) {
 	var deployments []Deployment
-	lambdas, err := c.Service.Function.List(ctx, c.Config.Resource.Prefix)
+	lambdas, err := c.Service.Function.List(ctx, deploymentPrefix)
 	if err != nil {
 		return []Deployment{}, err
 	}
@@ -92,130 +89,76 @@ func (c Convention) List(ctx context.Context) ([]Deployment, error) {
 	return deployments, nil
 }
 
-func (c Convention) ListNameSpace(ctx context.Context, namespace string) ([]Deployment, error) {
-	var deployments []Deployment
-	lambdas, err := c.Service.Function.List(ctx, c.Config.Resource.Prefix)
-	if err != nil {
-		return []Deployment{}, err
-	}
-
-	for _, lambda := range lambdas {
-		if lambda.Tags["NameSpace"] == namespace {
-			deployments = append(deployments, Deployment{lambda})
-		}
-	}
-
-	return deployments, nil
-}
-
-func (c Convention) Deploy(ctx context.Context, release release.Release, namespace, functionName string) (Deployment, error) {
+func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, error) {
 	var err error
 
 	ctx, span := otel.Tracer("").Start(ctx, "deployment.Deploy")
 	defer span.End()
 
-	resource := c.Config.ResourceName(namespace, functionName)
-
-	// if vpc configuration is partial, return an error.
-	if (c.Config.Vpc.SubnetIds == nil) != (c.Config.Vpc.SecurityGroupIds == nil) {
-		err := fmt.Errorf("VPC configuration requires both subnet and security group IDs to be set, or neither")
-		span.SetStatus(codes.Error, err.Error())
-		return Deployment{}, err
-	}
-
-	// pull labels from release and base64 decode.
-	labels, err := c.Config.Labels.Decode(release.Config.Labels)
+	deploytime, err := c.Config.Parse(r.Config.Labels)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
-	// template decoded labels.
-	for k, v := range labels {
-		templatedValue, err := c.Config.Template(v)
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return Deployment{}, err
-		}
+	role, err := c.Service.Function.PutRole(
+		ctx,
+		deploytime.Computed.Resource.Name,
+		deploytime.Role.Decoded,
+		deploytime.Computed.Resource.Tags,
+	)
 
-		labels[k] = templatedValue
-	}
-
-	// set default values for pertinent resources.json.tmpl settings.
-	resources := struct {
-		EphemeralStorage int32 `json:"ephemeralStorage"`
-		MemorySize       int32 `json:"memorySize"`
-		Timeout          int32 `json:"timeout"`
-	}{
-		EphemeralStorage: 512,
-		MemorySize:       128,
-		Timeout:          3,
-	}
-
-	if _, exists := labels[c.Config.Labels.Resources.Key]; exists {
-		if err := json.Unmarshal([]byte(labels[c.Config.Labels.Resources.Key]), &resources); err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return Deployment{}, err
-		}
-	}
-
-	// grab image uri and architecture from release for deployment parameters.
-	imageUri := release.Uri
-	imageArch, err := toArch(release.Architecture)
-	if err != nil {
-		return Deployment{}, err
-	}
-
-	// grab some label data for deployment tagging.
-	sha := labels[c.Config.Labels.Sha.Key]
-	roleDocument := labels[c.Config.Labels.Role.Key]
-	policyDocument := labels[c.Config.Labels.Policy.Key]
-	tags := map[string]string{"NameSpace": namespace, "Function": functionName, "Sha": sha}
-
-	// create role
-	role, err := c.Service.Function.PutRole(ctx, resource, roleDocument, tags)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
-	// create policy
-	policyArn := util.PolicyArnFromName(c.Config.Account.Id, resource)
-	policy, err := c.Service.Function.PutPolicy(ctx, policyArn, policyDocument, tags)
+	policy, err := c.Service.Function.PutPolicy(
+		ctx,
+		deploytime.Computed.Resource.Policy.Arn,
+		deploytime.Policy.Decoded,
+		deploytime.Computed.Resource.Tags,
+	)
+
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
-	// mix um together
-	if _, err := c.Service.Function.AttachPolicyToRole(ctx, *policy.Policy.Arn, *role.Role.RoleName); err != nil {
+	_, err = c.Service.Function.AttachPolicyToRole(
+		ctx,
+		*policy.Policy.Arn,
+		*role.Role.RoleName,
+	)
+
+	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
 	// create function parameters
 	input := &lambda.CreateFunctionInput{
-		FunctionName:  aws.String(resource),
+		FunctionName:  aws.String(deploytime.Computed.Resource.Name),
 		Role:          role.Role.Arn,
-		Tags:          tags,
-		Architectures: []types.Architecture{imageArch},
+		Tags:          deploytime.Computed.Resource.Tags,
+		Architectures: r.AWSArchitecture,
 		PackageType:   types.PackageTypeImage,
-		Timeout:       &resources.Timeout,
-		MemorySize:    &resources.MemorySize,
+		Timeout:       &deploytime.Computed.Resources.Timeout,
+		MemorySize:    &deploytime.Computed.Resources.MemorySize,
 		VpcConfig: &types.VpcConfig{
 			SecurityGroupIds: c.Config.Vpc.SecurityGroupIds,
 			SubnetIds:        c.Config.Vpc.SubnetIds,
 		},
 		EphemeralStorage: &types.EphemeralStorage{
-			Size: &resources.EphemeralStorage,
+			Size: &deploytime.Computed.Resources.EphemeralStorage,
 		},
 		Code: &types.FunctionCode{
-			ImageUri: aws.String(imageUri),
+			ImageUri: aws.String(r.Uri),
 		},
 		Publish: true,
 	}
 
-	// create function inside of vpc land if configured to do so.
+	// Has VPC Config
 	if input.VpcConfig.SubnetIds != nil && input.VpcConfig.SecurityGroupIds != nil {
 		log.Info().Msg("VPC configuration detected, ensuring ENI garbage collection role")
 
@@ -236,7 +179,7 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 
 		// After creating the function with this ENI garbage collection role, we can go ahead and attach the role we actually want.
 		_, err = c.Service.Function.PatchFunction(ctx, &lambda.UpdateFunctionConfigurationInput{
-			FunctionName: aws.String(resource),
+			FunctionName: aws.String(deploytime.Computed.Resource.Name),
 			Role:         role.Role.Arn,
 		})
 
@@ -245,16 +188,15 @@ func (c Convention) Deploy(ctx context.Context, release release.Release, namespa
 			return Deployment{}, err
 		}
 
-		return c.Find(ctx, namespace, functionName)
+		return c.Find(ctx, deploytime.Computed.Resource.Name)
 	}
 
-	// create function outside of vpc land.
+	// Does not have VPC config
 	if _, err = c.Service.Function.PutFunction(ctx, input, 5); err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
-
-	return c.Find(ctx, namespace, functionName)
+	return c.Find(ctx, deploytime.Computed.Resource.Name)
 }
 
 func (c Convention) Destroy(ctx context.Context, d Deployment) error {
@@ -308,17 +250,4 @@ func (d Deployment) FetchRelease(ctx context.Context, r RegistryService, registr
 	}
 
 	return release.Release{Image: release.Image{ImageInspect: fetched}, Uri: *d.Code.ImageUri}, nil
-}
-
-func toArch(arch string) (types.Architecture, error) {
-	switch arch {
-	case "arm64":
-		return types.Architecture("arm64"), nil
-	case "amd64":
-		return types.Architecture("x86_64"), nil
-	case "x86_64":
-		return types.Architecture("x86_64"), nil
-	default:
-		return "", fmt.Errorf("unsupported architecture %s", arch)
-	}
 }

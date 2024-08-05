@@ -8,11 +8,10 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/release"
 	"github.com/linecard/self/pkg/service/docker"
-
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
 type RuntimeService interface {
@@ -37,14 +36,19 @@ func FromServices(c config.Config, r RuntimeService) Convention {
 	}
 }
 
-func (c Convention) Emulate(ctx context.Context, i release.Image, s *sts.AssumeRoleOutput) error {
+func (c Convention) Emulate(ctx context.Context, i release.Image, s *types.Credentials) error {
 	command := append(i.Config.Entrypoint, i.Config.Cmd...)
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return err
 	}
 
-	riePath, err := ensureBinary(homeDir)
+	riePath, err := ensureRieBinary(homeDir)
+	if err != nil {
+		return err
+	}
+
+	deploytime, err := c.Config.Parse(i.Config.Labels)
 	if err != nil {
 		return err
 	}
@@ -53,11 +57,11 @@ func (c Convention) Emulate(ctx context.Context, i release.Image, s *sts.AssumeR
 		RiePath:         riePath,
 		Region:          c.Config.Account.Region,
 		ImageUri:        i.RepoTags[0],
-		Function:        c.Config.Function.Name,
+		Function:        deploytime.Computed.Resource.Name,
 		Command:         command,
-		AccessKeyId:     *s.Credentials.AccessKeyId,
-		SecretAccessKey: *s.Credentials.SecretAccessKey,
-		SessionToken:    *s.Credentials.SessionToken,
+		AccessKeyId:     *s.AccessKeyId,
+		SecretAccessKey: *s.SecretAccessKey,
+		SessionToken:    *s.SessionToken,
 	}
 
 	if err := c.Service.Runtime.Deploy(ctx, deployInput); err != nil {
@@ -67,14 +71,14 @@ func (c Convention) Emulate(ctx context.Context, i release.Image, s *sts.AssumeR
 	return nil
 }
 
-func ensureBinary(homeDir string) (string, error) {
+func ensureRieBinary(homeDir string) (string, error) {
 	var rieUrl string
 
 	switch runtime.GOARCH {
 	case "amd64", "x86_64":
-		rieUrl = "https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/download/v1.18/aws-lambda-rie-x86_64"
+		rieUrl = "https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/download/v1.21/aws-lambda-rie-x86_64"
 	case "arm64", "aarch64":
-		rieUrl = "https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/download/v1.18/aws-lambda-rie-arm64"
+		rieUrl = "https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/download/v1.21/aws-lambda-rie-arm64"
 	default:
 		return "", fmt.Errorf("unsupported architecture: %s", runtime.GOARCH)
 	}

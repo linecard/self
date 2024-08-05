@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"path"
 
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
@@ -36,7 +37,10 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 	BeforeEach(ctx, event)
 
 	if util.ShaLike(event.Detail.ImageTag) {
-		log.Warn().Str("function", cfg.Function.Name).Str("sha", cfg.Git.Sha).Str("branch", cfg.Git.Branch).Msg("skipping")
+		log.Warn().
+			Str("repository", event.Detail.RepositoryName).
+			Str("sha", cfg.Git.Sha).
+			Msg("skipping")
 		return nil
 	}
 
@@ -45,30 +49,25 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 
 	switch event.Detail.ActionType {
 	case "PUSH":
-		log.Info().Str("function", cfg.Function.Name).Str("branch", cfg.Git.Branch).Msgf("deploying")
+
+		log.Info().
+			Str("function", event.Detail.RepositoryName).
+			Str("branch", cfg.Git.Branch).
+			Msgf("deploying")
 
 		span.SetAttributes(
-			attribute.String("self.deploy.function", cfg.Function.Name),
-			attribute.String("self.deploy.branch", cfg.Git.Branch),
+			attribute.String("self.deploy.repository", event.Detail.RepositoryName),
+			attribute.String("self.deploy.branch", event.Detail.ImageTag),
+			attribute.String("self.deploy.function", path.Base(event.Detail.RepositoryName)),
 		)
 
-		release, err := api.Release.Find(ctx, cfg.Git.Branch)
+		release, err := api.Release.Find(ctx, event.Detail.RepositoryName, event.Detail.ImageTag)
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			return fmt.Errorf("failed to find release: %v", err)
 		}
 
-		labels, err := cfg.Labels.Decode(release.Config.Labels)
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return fmt.Errorf("failed to decode labels: %v", err)
-		}
-
-		span.SetAttributes(
-			attribute.String("self.deploy.sha", labels[cfg.Labels.Sha.Key]),
-		)
-
-		deployment, err := api.Deployment.Deploy(ctx, release, cfg.Git.Branch, cfg.Function.Name)
+		deployment, err := api.Deployment.Deploy(ctx, release)
 		if err != nil {
 			return fmt.Errorf("failed to deploy release: %v", err)
 		}
@@ -77,18 +76,23 @@ func Handler(ctx context.Context, event events.ECRImageActionEvent) error {
 			return fmt.Errorf("failed to converge subscriptions: %v", err)
 		}
 
-		if err := api.Httproxy.Converge(ctx, deployment, cfg.Git.Branch); err != nil {
+		if err := api.Httproxy.Converge(ctx, deployment); err != nil {
 			return fmt.Errorf("failed to converge gateway httproxy: %v", err)
 		}
 
 	case "DELETE":
-		log.Info().Str("function", cfg.Function.Name).Str("branch", cfg.Git.Branch).Msg("destroying")
+		log.Info().
+			Str("repository", event.Detail.RepositoryName).
+			Str("branch", event.Detail.ImageTag).
+			Msg("destroying")
+
 		span.SetAttributes(
-			attribute.String("self.destroy.function", cfg.Function.Name),
-			attribute.String("self.destroy.branch", cfg.Git.Branch),
+			attribute.String("self.destroy.repository", event.Detail.RepositoryName),
+			attribute.String("self.destroy.branch", event.Detail.ImageTag),
+			attribute.String("self.destroy.function", path.Base(event.Detail.RepositoryName)),
 		)
 
-		deployment, err := api.Deployment.Find(ctx, cfg.Git.Branch, cfg.Function.Name)
+		deployment, err := api.Deployment.Find(ctx, util.DeSlasher(event.Detail.RepositoryName))
 		if err != nil {
 			return fmt.Errorf("failed to find deployment: %v", err)
 		}

@@ -1,0 +1,46 @@
+export AWS_API_GATEWAY_ID := "vas86x7yjc"
+
+[private]
+default:
+    just --list
+
+init lang:
+    self init {{ lang }} init/testing-{{ lang }}
+    cp -r fixtures/bus init/testing-{{ lang }}/
+
+publish lang:
+    self publish init/testing-{{ lang }} --ecr-login
+
+deploy lang:
+    self deploy init/testing-{{ lang }}
+
+test lang:
+    FUNCTION_PATH=init/testing-{{lang}} bundler exec -- rspec -f d
+
+destroy lang:
+    self destroy init/testing-{{ lang }}
+
+clean lang:
+    rm -rf init/testing-{{ lang }}
+
+up:
+    #! /usr/bin/env bash
+    for lang in ruby python node go; do
+        just init $lang
+        just publish $lang
+        just deploy $lang
+    done
+
+smoke:
+    #! /usr/bin/env bash
+    for lang in ruby python node go; do
+        just test $lang
+    done
+
+down:
+    #! /usr/bin/env bash
+    for lang in ruby python node go; do
+        just destroy $lang
+        just clean $lang
+    done
+

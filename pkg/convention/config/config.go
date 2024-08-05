@@ -3,26 +3,32 @@ package config
 import (
 	"context"
 	"embed"
-	"encoding/json"
 	"fmt"
-	"html/template"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/linecard/self/internal/gitlib"
 	"github.com/linecard/self/internal/util"
+	"github.com/linecard/self/pkg/convention/manifest"
+)
+
+const (
+	EnvGitBranch            = "GIT_BRANCH_OVERRIDE"
+	EnvGitSha               = "GIT_SHA_OVERRIDE"
+	EnvOwnerPrefixResources = "AWS_PREFIX_RESOURCES_WITH_OWNER"
+	EnvOwnerPrefixRoutes    = "AWS_PREFIX_ROUTE_KEY_WITH_OWNER"
+	EnvEcrId                = "AWS_ECR_REGISTRY_ID"
+	EnvEcrRegion            = "AWS_ECR_REGISTRY_REGION"
+	EnvGwId                 = "AWS_API_GATEWAY_ID"
+	EnvSgIds                = "AWS_SECURITY_GROUP_IDS"
+	EnvSnIds                = "AWS_SUBNET_IDS"
 )
 
 //go:embed embedded/*
 var embedded embed.FS
-
-type Function struct {
-	Name string
-	Path string
-}
 
 type Caller struct {
 	Arn string
@@ -35,6 +41,7 @@ type Account struct {
 
 type Git struct {
 	Origin string
+	Path   string
 	Branch string
 	Sha    string
 	Root   string
@@ -45,14 +52,6 @@ type Registry struct {
 	Id     string
 	Region string
 	Url    string
-}
-
-type Repository struct {
-	Prefix string
-}
-
-type Resource struct {
-	Prefix string
 }
 
 type ApiGateway struct {
@@ -71,143 +70,129 @@ type TemplateData struct {
 	RegistryAccountId string
 }
 
-type Labels struct {
-	Schema    StringLabel
-	Sha       StringLabel
-	Role      EmbeddedFileLabel
-	Policy    FileLabel
-	Resources FileLabel
-	Bus       FolderLabel
+type Repository struct {
+	Namespace string
+}
+
+type Resource struct {
+	Namespace string
+}
+
+type Selfish struct {
+	Path string
+	Name string
 }
 
 type Config struct {
-	Function     *Function
-	Functions    []Function
+	Selfish      []Selfish
 	Caller       Caller
 	Account      Account
-	Git          Git
+	Git          gitlib.DotGit
 	Registry     Registry
 	Repository   Repository
 	Resource     Resource
 	ApiGateway   ApiGateway
 	Vpc          Vpc
 	TemplateData TemplateData
-	Labels       Labels
 	Version      string
 }
 
-// derived information
-func (c Config) ResourceName(namespace, functionName string) string {
-	return c.Resource.Prefix + "-" + util.DeSlasher(namespace) + "-" + functionName
-}
-
-func (c Config) RepositoryName() string {
-	return c.Repository.Prefix + "/" + c.Function.Name
-}
-
-func (c Config) RepositoryUrl() string {
-	return c.Registry.Url + "/" + c.RepositoryName()
-}
-
-func (c Config) RouteKey(namespace string) string {
-	verb := "ANY"
-	route := "/" + c.Resource.Prefix + "/" + namespace + "/" + c.Function.Name + "/{proxy+}"
-	routeKey := verb + " " + route
-	return routeKey
-}
-
-// helper methods
-func (c Config) Template(document string) (string, error) {
-	tmpl, err := template.New("document").Parse(string(document))
+func (c Config) Find(buildPath string) (BuildTime, error) {
+	absPath, err := filepath.Abs(buildPath)
 	if err != nil {
-		return "", err
+		return BuildTime{}, err
 	}
 
-	var b strings.Builder
-	if err := tmpl.Execute(&b, c.TemplateData); err != nil {
-		return "", err
+	for _, s := range c.Selfish {
+		if s.Path == absPath {
+			buildtime, err := manifest.Encode(absPath, c.Git)
+			if err != nil {
+				return BuildTime{}, err
+			}
+			return c.ComputeBuildTime(buildtime)
+		}
 	}
 
-	return b.String(), nil
+	return BuildTime{}, fmt.Errorf("no selfish found for %s", absPath)
 }
 
-func (c Config) AssumeRoleWithPolicy(ctx context.Context, stsc *sts.Client, policy string) (*sts.AssumeRoleOutput, error) {
-	roleArn, err := util.RoleArnFromAssumeRoleArn(c.Caller.Arn)
+func (c Config) Parse(labels map[string]string) (DeployTime, error) {
+	deploytime, err := manifest.Decode(labels, c.TemplateData)
 	if err != nil {
-		return nil, err
+		return DeployTime{}, err
 	}
 
-	return stsc.AssumeRole(ctx, &sts.AssumeRoleInput{
-		RoleArn:         aws.String(roleArn),
-		RoleSessionName: aws.String(os.Getenv("USER") + "-masquerade"),
-		Policy:          &policy,
-	})
+	return c.ComputeDeployTime(deploytime)
 }
 
-func (c Config) Json(ctx context.Context) (string, error) {
-	cJson, err := json.Marshal(c)
-	if err != nil {
-		return "", err
+func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClient, stsc STSClient) (err error) {
+	if err = c.DiscoverGit(ctx); err != nil {
+		return
 	}
 
-	return string(cJson), nil
+	if err = c.DiscoverCaller(ctx, stsc, awsConfig); err != nil {
+		return
+	}
+
+	if err = c.DiscoverRegistry(ctx, ecrc, awsConfig); err != nil {
+		return
+	}
+
+	if err = c.DiscoverGateway(ctx); err != nil {
+		return
+	}
+
+	if err = c.DiscoverVpc(ctx); err != nil {
+		return
+	}
+
+	if err = c.DiscoverSelfish(ctx); err != nil {
+		return
+	}
+
+	nameSpace := strings.TrimSuffix(c.Git.Origin.Path, ".git")
+	c.Repository.Namespace = strings.TrimPrefix(nameSpace, "/")
+
+	// temporary backwards compatability envar
+	if value, exists := os.LookupEnv(EnvOwnerPrefixResources); exists {
+		if strings.ToLower(value) == "true" {
+			c.Resource.Namespace = util.DeSlasher(nameSpace)
+		}
+	} else {
+		noOwner := strings.Split(util.DeSlasher(nameSpace), "-")[1:]
+		c.Resource.Namespace = strings.Join(noOwner, "-")
+	}
+
+	c.TemplateData.AccountId = c.Account.Id
+	c.TemplateData.Region = c.Account.Region
+	c.TemplateData.RegistryRegion = c.Registry.Region
+	c.TemplateData.RegistryAccountId = c.Registry.Id
+
+	return
 }
 
-func (c Config) Scaffold(templateName, functionName string) error {
-	scaffoldPath := "embedded/scaffold"
-	templatePath := filepath.Join(scaffoldPath, templateName)
-
-	if _, err := embedded.ReadDir(templatePath); os.IsNotExist(err) {
-		templates, err := embedded.ReadDir(scaffoldPath)
-		if err != nil {
-			return err
-		}
-
-		var templateNames []string
-		for _, template := range templates {
-			templateNames = append(templateNames, template.Name())
-		}
-
-		return fmt.Errorf("scaffold %s does not exist. valid options: %s", templateName, strings.Join(templateNames, ", "))
+func (c *Config) FromEvent(ctx context.Context, awsConfig aws.Config, ecrc ECRClient, stsc STSClient, event events.ECRImageActionEvent) (err error) {
+	if err = c.DiscoverCaller(ctx, stsc, awsConfig); err != nil {
+		return
 	}
 
-	return fs.WalkDir(embedded, templatePath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
+	if err = c.DiscoverRegistry(ctx, ecrc, awsConfig); err != nil {
+		return
+	}
 
-		// Calculate the relative path with respect to templatePath
-		relPath, err := filepath.Rel(templatePath, path)
-		if err != nil {
-			return err
-		}
-		targetFilePath := filepath.Join(functionName, relPath)
+	if err = c.DiscoverGateway(ctx); err != nil {
+		return
+	}
 
-		if d.IsDir() {
-			return os.MkdirAll(targetFilePath, os.ModePerm)
-		}
+	if err = c.DiscoverVpc(ctx); err != nil {
+		return
+	}
 
-		content, err := fs.ReadFile(embedded, path)
-		if err != nil {
-			return err
-		}
+	if util.ShaLike(event.Detail.ImageTag) {
+		c.Git.Sha = event.Detail.ImageTag
+	} else {
+		c.Git.Branch = event.Detail.ImageTag
+	}
 
-		tmpl, err := template.New(filepath.Base(path)).Parse(string(content))
-		if err != nil {
-			return err
-		}
-
-		outputFile, err := os.Create(targetFilePath)
-		if err != nil {
-			return err
-		}
-		defer outputFile.Close()
-
-		err = tmpl.Execute(outputFile, c)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
+	return
 }

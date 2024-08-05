@@ -3,8 +3,6 @@ package handler
 import (
 	"context"
 
-	"github.com/linecard/self/internal/umwelt"
-	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/sdk"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -26,15 +24,11 @@ func BeforeEach(ctx context.Context, event events.ECRImageActionEvent) {
 	stsc := sts.NewFromConfig(awsConfig)
 	ecrc := ecr.NewFromConfig(awsConfig)
 
-	here, err := umwelt.FromEvent(ctx, event, awsConfig, ecrc, stsc)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to introspect surrounding environment")
+	if err := cfg.FromEvent(ctx, awsConfig, ecrc, stsc, event); err != nil {
+		log.Fatal().Err(err).Msg("failed to load configuration from event")
 	}
 
-	cfg = config.FromHere(here)
-
-	api, err = sdk.Init(ctx, awsConfig, cfg)
-	if err != nil {
+	if api, err = sdk.Init(ctx, awsConfig, cfg); err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize SDK")
 	}
 }
