@@ -1,4 +1,6 @@
-export AWS_API_GATEWAY_ID := "vas86x7yjc"
+export SELF_API_GATEWAY_ID := "vas86x7yjc"
+export SELF_API_GATEWAY_AUTH_TYPE := "JWT"
+export SELF_API_GATEWAY_AUTHORIZER_ID := "c0bsen"
 export PATH := x'${PATH}:$PWD/bin'
 
 [private]
