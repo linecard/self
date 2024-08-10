@@ -71,6 +71,6 @@ type Inspect struct {
 
 type Curl struct {
 	Method string `arg:"positional,required" help:"HTTP method"`
-	URL    string `arg:"positional,required" help:"URL to request"`
+	Url    string `arg:"positional,required" help:"URL to send request to"`
 	Data   string `arg:"-d,--data" help:"payload to send"`
 }

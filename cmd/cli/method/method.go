@@ -281,7 +281,7 @@ func PrintBuildTime(ctx context.Context, api sdk.API, p *param.BuildTime) {
 }
 
 func CurlDeployment(ctx context.Context, api sdk.API, p *param.Curl) {
-	response, err := api.Curl.Signed(ctx, p.Method, p.URL, []byte(p.Data))
+	response, err := api.Curl.Signed(ctx, p.Method, p.Url, []byte(p.Data))
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to execute request")
 	}
