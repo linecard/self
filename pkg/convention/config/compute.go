@@ -49,12 +49,14 @@ type ComputedTemplateData struct {
 }
 
 type ComputedResources struct {
-	EphemeralStorage int32  `json:"ephemeralStorage"`
-	MemorySize       int32  `json:"memorySize"`
-	Timeout          int32  `json:"timeout"`
-	Http             bool   `json:"http"`
-	Public           bool   `json:"public"`
-	RouteKey         string `json:"routeKey"`
+	EphemeralStorage int32    `json:"ephemeralStorage"`
+	MemorySize       int32    `json:"memorySize"`
+	Timeout          int32    `json:"timeout"`
+	Http             bool     `json:"http"`
+	AuthType         string   `json:"authType"`
+	AuthorizerId     *string  `json:"authorizerId"`
+	Audience         []string `json:"audience"`
+	RouteKey         string   `json:"routeKey"`
 }
 
 type Computed struct {
@@ -128,7 +130,15 @@ func (resources *ComputedResources) Solve(repository Repository, git gitlib.DotG
 		MemorySize:       128,
 		Timeout:          3,
 		Http:             true,
-		Public:           false,
+		AuthType:         "AWS_IAM",
+	}
+
+	if value, exists := os.LookupEnv(EnvAuthType); exists {
+		defaults.AuthType = value
+	}
+
+	if value, exists := os.LookupEnv(EnvAuthorizerId); exists {
+		defaults.AuthorizerId = &value
 	}
 
 	if value, exists := os.LookupEnv(EnvOwnerPrefixRoutes); exists {
@@ -164,9 +174,6 @@ func (resources *ComputedResources) Solve(repository Repository, git gitlib.DotG
 				json.Unmarshal([]byte(resourcesJson), &jsonMap)
 				if _, ok := jsonMap["http"]; ok {
 					resources.Http = temp.Http
-				}
-				if _, ok := jsonMap["public"]; ok {
-					resources.Public = temp.Public
 				}
 			}
 			if temp.RouteKey != "" {

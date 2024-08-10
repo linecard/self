@@ -28,6 +28,8 @@ type ApiGatewayV2Client interface {
 	UpdateRoute(ctx context.Context, params *apigatewayv2.UpdateRouteInput, optFns ...func(*apigatewayv2.Options)) (*apigatewayv2.UpdateRouteOutput, error)
 	GetApi(ctx context.Context, params *apigatewayv2.GetApiInput, optFns ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApiOutput, error)
 	GetApis(ctx context.Context, params *apigatewayv2.GetApisInput, optFns ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error)
+	CreateAuthorizer(ctx context.Context, params *apigatewayv2.CreateAuthorizerInput, optFns ...func(*apigatewayv2.Options)) (*apigatewayv2.CreateAuthorizerOutput, error)
+	DeleteAuthorizer(ctx context.Context, params *apigatewayv2.DeleteAuthorizerInput, optFns ...func(*apigatewayv2.Options)) (*apigatewayv2.DeleteAuthorizerOutput, error)
 }
 
 type LambdaClient interface {
@@ -110,10 +112,19 @@ func (s Service) PutIntegration(ctx context.Context, apiId, lambdaArn, routeKey 
 	})
 }
 
-func (s Service) PutRoute(ctx context.Context, apiId, integrationId, routeKey string, awsAuth bool) (*apigatewayv2.GetRouteOutput, error) {
-	authType := types.AuthorizationTypeNone
-	if awsAuth {
-		authType = types.AuthorizationTypeAwsIam
+func (s Service) PutRoute(ctx context.Context, apiId, integrationId, routeKey string, authType string, authorizerId *string) (*apigatewayv2.GetRouteOutput, error) {
+	var authTypeType types.AuthorizationType
+	switch authType {
+	case "NONE":
+		authTypeType = types.AuthorizationTypeNone
+	case "AWS_IAM":
+		authTypeType = types.AuthorizationTypeAwsIam
+	case "CUSTOM":
+		authTypeType = types.AuthorizationTypeCustom
+	case "JWT":
+		authTypeType = types.AuthorizationTypeJwt
+	default:
+		return nil, fmt.Errorf("unsupported authorization type %s", authType)
 	}
 
 	routes, err := s.Client.Gw.GetRoutes(ctx, &apigatewayv2.GetRoutesInput{
@@ -131,7 +142,8 @@ func (s Service) PutRoute(ctx context.Context, apiId, integrationId, routeKey st
 				RouteId:           route.RouteId,
 				RouteKey:          aws.String(routeKey),
 				Target:            aws.String(fmt.Sprintf("integrations/%s", integrationId)),
-				AuthorizationType: authType,
+				AuthorizationType: authTypeType,
+				AuthorizerId:      authorizerId,
 			})
 
 			if err != nil {
@@ -149,7 +161,8 @@ func (s Service) PutRoute(ctx context.Context, apiId, integrationId, routeKey st
 		ApiId:             aws.String(apiId),
 		RouteKey:          aws.String(routeKey),
 		Target:            aws.String(fmt.Sprintf("integrations/%s", integrationId)),
-		AuthorizationType: authType,
+		AuthorizationType: authTypeType,
+		AuthorizerId:      authorizerId,
 	})
 
 	if err != nil {

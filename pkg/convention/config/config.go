@@ -16,15 +16,17 @@ import (
 )
 
 const (
-	EnvGitBranch            = "GIT_BRANCH_OVERRIDE"
-	EnvGitSha               = "GIT_SHA_OVERRIDE"
-	EnvOwnerPrefixResources = "AWS_PREFIX_RESOURCES_WITH_OWNER"
-	EnvOwnerPrefixRoutes    = "AWS_PREFIX_ROUTE_KEY_WITH_OWNER"
-	EnvEcrId                = "AWS_ECR_REGISTRY_ID"
-	EnvEcrRegion            = "AWS_ECR_REGISTRY_REGION"
-	EnvGwId                 = "AWS_API_GATEWAY_ID"
-	EnvSgIds                = "AWS_SECURITY_GROUP_IDS"
-	EnvSnIds                = "AWS_SUBNET_IDS"
+	EnvGitBranch            = "SELF_BRANCH_OVERRIDE"
+	EnvGitSha               = "SELF_SHA_OVERRIDE"
+	EnvOwnerPrefixResources = "SELF_PREFIX_RESOURCES_WITH_OWNER"
+	EnvOwnerPrefixRoutes    = "SELF_PREFIX_ROUTE_KEY_WITH_OWNER"
+	EnvEcrId                = "SELF_ECR_REGISTRY_ID"
+	EnvEcrRegion            = "SELF_ECR_REGISTRY_REGION"
+	EnvGwId                 = "SELF_API_GATEWAY_ID"
+	EnvAuthType             = "SELF_API_GATEWAY_AUTH_TYPE"
+	EnvAuthorizerId         = "SELF_API_GATEWAY_AUTHORIZER_ID"
+	EnvSgIds                = "SELF_SECURITY_GROUP_IDS"
+	EnvSnIds                = "SELF_SUBNET_IDS"
 )
 
 //go:embed embedded/*
@@ -95,7 +97,7 @@ type Config struct {
 	Vpc          Vpc
 	TemplateData TemplateData
 	Version      string
-	AwsConfig    aws.Config
+	AwsConfig    aws.Config `json:"-"`
 }
 
 func (c Config) Find(buildPath string) (BuildTime, error) {
