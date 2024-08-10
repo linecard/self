@@ -68,3 +68,9 @@ type Inspect struct {
 	Deploy *DeployTime   `arg:"subcommand:deploy" help:"print deploytime config for given function"`
 	Global *GlobalConfig `arg:"subcommand:global" help:"print global config for repository"`
 }
+
+type Curl struct {
+	Method string `arg:"positional,required" help:"HTTP method"`
+	URL    string `arg:"positional,required" help:"URL to request"`
+	Data   string `arg:"-d,--data" help:"payload to send"`
+}

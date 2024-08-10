@@ -2,9 +2,12 @@ package sdk
 
 import (
 	"context"
+	"net/http"
+	"time"
 
 	// config
 	"github.com/linecard/self/pkg/convention/config"
+	"github.com/linecard/self/pkg/convention/curl"
 
 	// services
 	"github.com/linecard/self/pkg/service/docker"
@@ -12,6 +15,7 @@ import (
 	"github.com/linecard/self/pkg/service/function"
 	"github.com/linecard/self/pkg/service/gateway"
 	"github.com/linecard/self/pkg/service/registry"
+	"github.com/linecard/self/pkg/service/sigv4"
 
 	// conventions
 	"github.com/linecard/self/pkg/convention/account"
@@ -32,12 +36,14 @@ import (
 )
 
 type Clients struct {
+	AwsConfig          aws.Config
 	StsClient          *sts.Client
 	EcrClient          *ecr.Client
 	LambdaClient       *lambda.Client
 	IamClient          *iam.Client
 	EventBridgeClient  *eventbridge.Client
 	ApiGatewayV2Client *apigatewayv2.Client
+	Http               http.Client
 }
 
 type Services struct {
@@ -46,6 +52,7 @@ type Services struct {
 	Function function.Service
 	Event    event.Service
 	Gateway  gateway.Service
+	Sigv4    sigv4.Service
 }
 
 type Conventions struct {
@@ -55,6 +62,7 @@ type Conventions struct {
 	Deployment   deployment.Convention
 	Subscription bus.Convention
 	Httproxy     httproxy.Convention
+	Curl         curl.Convention
 }
 
 type API struct {
@@ -101,22 +109,32 @@ func InitServices(ctx context.Context, clients Clients) (Services, error) {
 		return Services{}, err
 	}
 
+	creds, err := clients.AwsConfig.Credentials.Retrieve(ctx)
+	if err != nil {
+		return Services{}, err
+	}
+
 	return Services{
 		Docker:   docker,
 		Registry: registry.FromClients(clients.EcrClient),
 		Function: function.FromClients(clients.LambdaClient, clients.IamClient),
 		Event:    event.FromClients(clients.EventBridgeClient, clients.LambdaClient),
 		Gateway:  gateway.FromClients(clients.ApiGatewayV2Client, clients.LambdaClient),
+		Sigv4:    sigv4.FromClients(creds, clients.AwsConfig.Region),
 	}, nil
 }
 
 func InitClients(ctx context.Context, awsConfig aws.Config) (Clients, error) {
 	return Clients{
+		AwsConfig:          awsConfig,
 		StsClient:          sts.NewFromConfig(awsConfig),
 		EcrClient:          ecr.NewFromConfig(awsConfig),
 		LambdaClient:       lambda.NewFromConfig(awsConfig),
 		IamClient:          iam.NewFromConfig(awsConfig),
 		EventBridgeClient:  eventbridge.NewFromConfig(awsConfig),
 		ApiGatewayV2Client: apigatewayv2.NewFromConfig(awsConfig),
+		Http: http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}, nil
 }
