@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -284,5 +286,14 @@ func CurlDeployment(ctx context.Context, api sdk.API, p *param.Curl) {
 		log.Fatal().Err(err).Msg("failed to execute request")
 	}
 
-	fmt.Println(response)
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to read response body")
+	}
+
+	fmt.Println(string(body))
+
+	if response.StatusCode != 200 {
+		os.Exit(1)
+	}
 }

@@ -10,7 +10,7 @@ import (
 )
 
 type Sigv4Service interface {
-	SignRequest(ctx context.Context, request *http.Request) error
+	SignRequest(ctx context.Context, request *http.Request) (err error)
 	MockIAMAuthRequestCtx(ctx context.Context, callerArn string, req *http.Request) (err error)
 }
 
@@ -35,10 +35,6 @@ func FromServices(c config.Config, sigv4 Sigv4Service) Convention {
 func (c Convention) Signed(ctx context.Context, method string, url string, data []byte) (response *http.Response, err error) {
 	request, err := http.NewRequest(method, url, bytes.NewReader(data))
 	if err != nil {
-		return
-	}
-
-	if err = c.Service.Sigv4.SignRequest(ctx, request); err != nil {
 		return
 	}
 

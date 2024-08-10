@@ -100,6 +100,7 @@ func InitConventions(ctx context.Context, config config.Config, services Service
 		Deployment:   deployment.FromServices(config, services.Function, services.Registry),
 		Subscription: bus.FromServices(config, services.Registry, services.Event),
 		Httproxy:     httproxy.FromServices(config, services.Gateway, services.Registry),
+		Curl:         curl.FromServices(config, services.Sigv4),
 	}, nil
 }
 
