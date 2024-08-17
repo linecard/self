@@ -33,6 +33,10 @@ type BuildService interface {
 	Push(ctx context.Context, tag string) error
 }
 
+type EventService interface {
+	Emit(ctx context.Context, accountId, busName, detailType string, detail any) error
+}
+
 type Image struct {
 	types.ImageInspect
 }
@@ -53,6 +57,7 @@ type ReleaseSummary struct {
 type Service struct {
 	Registry RegistryService
 	Build    BuildService
+	Event    EventService
 }
 
 type Convention struct {
@@ -133,7 +138,10 @@ func (c Convention) List(ctx context.Context, repositoryName string) ([]ReleaseS
 }
 
 func (c Convention) Build(ctx context.Context, path, context string) (Image, config.BuildTime, error) {
-	buildtime, err := c.Config.Find(path)
+	ctx, span := otel.Tracer("").Start(ctx, "release.Build")
+	defer span.End()
+
+	buildtime, err := c.Config.BuildTime(path)
 	if err != nil {
 		return Image{}, buildtime, err
 	}
@@ -176,12 +184,15 @@ func (c Convention) Build(ctx context.Context, path, context string) (Image, con
 }
 
 func (c Convention) Publish(ctx context.Context, i Image) error {
+	ctx, span := otel.Tracer("").Start(ctx, "release.Publish")
+	defer span.End()
+
 	// This is a very fuzzy validation. Catches issues with messy commits and mutable tagging ecr-side.
 	if len(i.RepoTags) != 2 {
 		for _, tag := range i.RepoTags {
 			fmt.Println(tag)
 		}
-		return fmt.Errorf("image must have exactly two tags, was given %d, do you have any identical builds?", len(i.RepoTags))
+		return fmt.Errorf("image must have exactly two tags, was given %d, try deleting local images", len(i.RepoTags))
 	}
 
 	for _, tag := range i.RepoTags {
@@ -194,6 +205,9 @@ func (c Convention) Publish(ctx context.Context, i Image) error {
 }
 
 func (c Convention) Untag(ctx context.Context, repositoryName, tag string) error {
+	ctx, span := otel.Tracer("").Start(ctx, "release.Untag")
+	defer span.End()
+
 	return c.Service.Registry.Untag(ctx, c.Config.Registry.Id, repositoryName, tag)
 }
 

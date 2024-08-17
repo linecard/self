@@ -95,7 +95,7 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	ctx, span := otel.Tracer("").Start(ctx, "deployment.Deploy")
 	defer span.End()
 
-	deploytime, err := c.Config.Parse(r.Config.Labels)
+	deploytime, err := c.Config.DeployTime(r.Config.Labels)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err

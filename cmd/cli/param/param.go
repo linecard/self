@@ -23,7 +23,7 @@ type Init struct {
 
 type Build struct {
 	SSHAgent bool   `arg:"-a,--ssh-agent" help:"mount ssh-agent into build (not yet implemented)"`
-	Context  string `arg:"-c,--build-context" help:"set builtime path, defaults to arg path."`
+	Context  string `arg:"-c,--context" help:"set builtime path, defaults to arg path."`
 	Run      bool   `arg:"--run" help:"run the function locally after building"`
 	FunctionArg
 }
@@ -32,6 +32,7 @@ type Publish struct {
 	Login            bool `arg:"-l,--ecr-login" help:"Login to ECR"`
 	EnsureRepository bool `arg:"--ensure-repository" help:"Ensure ECR repository exists"`
 	Force            bool `arg:"-f,--force" help:"Override dirty commit protection"`
+	EmitDeploy       bool `arg:"--emit-deploy" help:"Emit deploy event"`
 	Build
 }
 
@@ -67,4 +68,9 @@ type Inspect struct {
 	Build  *BuildTime    `arg:"subcommand:build" help:"print buildtime config for given function"`
 	Deploy *DeployTime   `arg:"subcommand:deploy" help:"print deploytime config for given function"`
 	Global *GlobalConfig `arg:"subcommand:global" help:"print global config for repository"`
+}
+
+type Untag struct {
+	FunctionArg
+	EmitDestroy bool `arg:"--emit-destroy" help:"Emit destroy event"`
 }

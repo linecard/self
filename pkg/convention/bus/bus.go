@@ -24,6 +24,7 @@ type EventService interface {
 	List(ctx context.Context) ([]event.JoinedRule, error)
 	Put(ctx context.Context, bus, rule, expression, function, arn string) error
 	Delete(ctx context.Context, bus, rule, function, arn string) error
+	Emit(ctx context.Context, accountId, busName, detailType string, detail any) error
 }
 
 type Meta struct {
@@ -59,6 +60,10 @@ func FromServices(c config.Config, r RegistryService, e EventService) Convention
 			Event:    e,
 		},
 	}
+}
+
+func (c Convention) Emit(ctx context.Context, detail config.EventDetail) error {
+	return c.Service.Event.Emit(ctx, c.Config.Registry.Id, "self-bus", detail.Action, detail)
 }
 
 func (c Convention) Find(ctx context.Context, d deployment.Deployment, bus, rule string) (Subscription, error) {
@@ -240,7 +245,7 @@ func (c Convention) listDefined(ctx context.Context, d deployment.Deployment) ([
 		return []Subscription{}, err
 	}
 
-	deploytime, err := c.Config.Parse(release.Config.Labels)
+	deploytime, err := c.Config.DeployTime(release.Config.Labels)
 	if err != nil {
 		return []Subscription{}, err
 	}

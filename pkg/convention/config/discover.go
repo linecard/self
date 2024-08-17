@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/linecard/self/internal/gitlib"
+	"github.com/linecard/self/internal/util"
 )
 
 type STSClient interface {
@@ -22,7 +24,54 @@ type ECRClient interface {
 	DescribeRegistry(ctx context.Context, params *ecr.DescribeRegistryInput, optFns ...func(*ecr.Options)) (*ecr.DescribeRegistryOutput, error)
 }
 
-func (c *Config) DiscoverCaller(ctx context.Context, client STSClient, awsConfig aws.Config) (err error) {
+func (c *Config) FromAws(ctx context.Context, awsConfig aws.Config, stsc STSClient, ecrc ECRClient) (err error) {
+	if err = c.discoverCaller(ctx, stsc, awsConfig); err != nil {
+		return
+	}
+
+	if err = c.discoverRegistry(ctx, ecrc, awsConfig); err != nil {
+		return
+	}
+
+	if err = c.discoverGateway(); err != nil {
+		return
+	}
+
+	if err = c.discoverVpc(); err != nil {
+		return
+	}
+
+	c.TemplateData.AccountId = c.Account.Id
+	c.TemplateData.Region = c.Account.Region
+	c.TemplateData.RegistryRegion = c.Registry.Region
+	c.TemplateData.RegistryAccountId = c.Registry.Id
+
+	return nil
+}
+
+func (c *Config) FromEvent(ctx context.Context, event Event) (err error) {
+	c.Git.Branch = event.Detail.Branch
+	c.Git.Sha = event.Detail.Sha
+	if c.Git.Origin, err = url.Parse(event.Detail.Origin); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Config) FromCwd(ctx context.Context) (err error) {
+	if err = c.discoverGit(); err != nil {
+		return
+	}
+
+	if err = c.discoverSelfish(); err != nil {
+		return
+	}
+
+	return nil
+}
+
+func (c *Config) discoverCaller(ctx context.Context, client STSClient, awsConfig aws.Config) (err error) {
 	var req *sts.GetCallerIdentityInput
 	var res *sts.GetCallerIdentityOutput
 
@@ -36,7 +85,7 @@ func (c *Config) DiscoverCaller(ctx context.Context, client STSClient, awsConfig
 	return nil
 }
 
-func (c *Config) DiscoverRegistry(ctx context.Context, ecrFallback ECRClient, regionFallback aws.Config) (err error) {
+func (c *Config) discoverRegistry(ctx context.Context, ecrFallback ECRClient, regionFallback aws.Config) (err error) {
 	var req *ecr.DescribeRegistryInput
 	var res *ecr.DescribeRegistryOutput
 
@@ -61,14 +110,14 @@ func (c *Config) DiscoverRegistry(ctx context.Context, ecrFallback ECRClient, re
 	return nil
 }
 
-func (c *Config) DiscoverGateway(ctx context.Context) (err error) {
+func (c *Config) discoverGateway() (err error) {
 	if gwId, exists := os.LookupEnv(EnvGwId); exists {
 		c.ApiGateway.Id = &gwId
 	}
 	return nil
 }
 
-func (c *Config) DiscoverVpc(ctx context.Context) (err error) {
+func (c *Config) discoverVpc() (err error) {
 	var count int
 
 	if sgIds, sgExists := os.LookupEnv(EnvSgIds); sgExists {
@@ -90,7 +139,7 @@ func (c *Config) DiscoverVpc(ctx context.Context) (err error) {
 	return nil
 }
 
-func (c *Config) DiscoverGit(ctx context.Context) (err error) {
+func (c *Config) discoverGit() (err error) {
 	if c.Git, err = gitlib.FromCwd(); err != nil {
 		return err
 	}
@@ -103,10 +152,22 @@ func (c *Config) DiscoverGit(ctx context.Context) (err error) {
 		c.Git.Sha = value
 	}
 
+	nameSpace := strings.TrimSuffix(c.Git.Origin.Path, ".git")
+	c.Repository.Namespace = strings.TrimPrefix(nameSpace, "/")
+
+	if value, exists := os.LookupEnv(EnvOwnerPrefixResources); exists {
+		if strings.ToLower(value) == "true" {
+			c.Resource.Namespace = util.DeSlasher(nameSpace)
+		}
+	} else {
+		noOwner := strings.Split(util.DeSlasher(nameSpace), "-")[1:]
+		c.Resource.Namespace = strings.Join(noOwner, "-")
+	}
+
 	return err
 }
 
-func (c *Config) DiscoverSelfish(ctx context.Context) (err error) {
+func (c *Config) discoverSelfish() (err error) {
 	selfish := func(path string) bool {
 		signature := []string{"policy.json.tmpl", "Dockerfile"}
 

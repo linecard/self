@@ -4,14 +4,10 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"os"
 	"path/filepath"
-	"strings"
 
-	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/linecard/self/internal/gitlib"
-	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/manifest"
 )
 
@@ -97,7 +93,34 @@ type Config struct {
 	Version      string
 }
 
-func (c Config) Find(buildPath string) (BuildTime, error) {
+// Initialize configuration from AWS and local filesystem.
+func Stateful(ctx context.Context, awsConfig aws.Config, stsc STSClient, ecrc ECRClient) (c Config, err error) {
+	if err = c.FromAws(ctx, awsConfig, stsc, ecrc); err != nil {
+		return
+	}
+
+	if err = c.FromCwd(ctx); err != nil {
+		return
+	}
+
+	return
+}
+
+// Initialize configuration from AWS only.
+func Stateless(ctx context.Context, awsConfig aws.Config, stsc STSClient, ecrc ECRClient, event Event) (c Config, err error) {
+	if err = c.FromAws(ctx, awsConfig, stsc, ecrc); err != nil {
+		return
+	}
+
+	if err = c.FromEvent(ctx, event); err != nil {
+		return
+	}
+
+	return
+}
+
+// Generate buildtime configuration from a selfish path.
+func (c Config) BuildTime(buildPath string) (BuildTime, error) {
 	absPath, err := filepath.Abs(buildPath)
 	if err != nil {
 		return BuildTime{}, err
@@ -116,83 +139,12 @@ func (c Config) Find(buildPath string) (BuildTime, error) {
 	return BuildTime{}, fmt.Errorf("no selfish found for %s", absPath)
 }
 
-func (c Config) Parse(labels map[string]string) (DeployTime, error) {
+// Generate deploytime configuration from release labels.
+func (c Config) DeployTime(labels map[string]string) (DeployTime, error) {
 	deploytime, err := manifest.Decode(labels, c.TemplateData)
 	if err != nil {
 		return DeployTime{}, err
 	}
 
 	return c.ComputeDeployTime(deploytime)
-}
-
-func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClient, stsc STSClient) (err error) {
-	if err = c.DiscoverGit(ctx); err != nil {
-		return
-	}
-
-	if err = c.DiscoverCaller(ctx, stsc, awsConfig); err != nil {
-		return
-	}
-
-	if err = c.DiscoverRegistry(ctx, ecrc, awsConfig); err != nil {
-		return
-	}
-
-	if err = c.DiscoverGateway(ctx); err != nil {
-		return
-	}
-
-	if err = c.DiscoverVpc(ctx); err != nil {
-		return
-	}
-
-	if err = c.DiscoverSelfish(ctx); err != nil {
-		return
-	}
-
-	nameSpace := strings.TrimSuffix(c.Git.Origin.Path, ".git")
-	c.Repository.Namespace = strings.TrimPrefix(nameSpace, "/")
-
-	// temporary backwards compatability envar
-	if value, exists := os.LookupEnv(EnvOwnerPrefixResources); exists {
-		if strings.ToLower(value) == "true" {
-			c.Resource.Namespace = util.DeSlasher(nameSpace)
-		}
-	} else {
-		noOwner := strings.Split(util.DeSlasher(nameSpace), "-")[1:]
-		c.Resource.Namespace = strings.Join(noOwner, "-")
-	}
-
-	c.TemplateData.AccountId = c.Account.Id
-	c.TemplateData.Region = c.Account.Region
-	c.TemplateData.RegistryRegion = c.Registry.Region
-	c.TemplateData.RegistryAccountId = c.Registry.Id
-
-	return
-}
-
-func (c *Config) FromEvent(ctx context.Context, awsConfig aws.Config, ecrc ECRClient, stsc STSClient, event events.ECRImageActionEvent) (err error) {
-	if err = c.DiscoverCaller(ctx, stsc, awsConfig); err != nil {
-		return
-	}
-
-	if err = c.DiscoverRegistry(ctx, ecrc, awsConfig); err != nil {
-		return
-	}
-
-	if err = c.DiscoverGateway(ctx); err != nil {
-		return
-	}
-
-	if err = c.DiscoverVpc(ctx); err != nil {
-		return
-	}
-
-	if util.ShaLike(event.Detail.ImageTag) {
-		c.Git.Sha = event.Detail.ImageTag
-	} else {
-		c.Git.Branch = event.Detail.ImageTag
-	}
-
-	return
 }

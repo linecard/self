@@ -84,7 +84,7 @@ func Invoke(ctx context.Context) {
 		)
 	}
 
-	if err := cfg.FromCwd(ctx, awsConfig, ecrc, stsc); err != nil {
+	if cfg, err = config.Stateful(ctx, awsConfig, stsc, ecrc); err != nil {
 		log.Fatal().Err(err).Msg("failed to load configuration from cwd")
 	}
 

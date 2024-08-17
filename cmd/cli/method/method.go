@@ -11,8 +11,11 @@ import (
 	"github.com/golang-module/carbon/v2"
 	"github.com/linecard/self/cmd/cli/param"
 	"github.com/linecard/self/internal/util"
+	"github.com/linecard/self/pkg/convention/config"
 	dtype "github.com/linecard/self/pkg/convention/deployment"
 	"github.com/linecard/self/pkg/sdk"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/rs/zerolog/log"
@@ -35,17 +38,7 @@ func BuildRelease(ctx context.Context, api sdk.API, p *param.Build) {
 	}
 
 	if p.Run {
-		deploytime, err := api.Config.Parse(image.Config.Labels)
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to decode deploytime schema")
-		}
-
-		creds, err := api.Config.AssumeRoleWithPolicy(ctx, deploytime.Policy.Decoded)
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to assume role with policy")
-		}
-
-		if err := api.Runtime.Emulate(ctx, image, creds); err != nil {
+		if err := api.Runtime.Emulate(ctx, image); err != nil {
 			log.Fatal().Err(err).Msg("failed to emulate runtime")
 		}
 	}
@@ -80,6 +73,30 @@ func PublishRelease(ctx context.Context, api sdk.API, p *param.Publish) {
 	if err := api.Release.Publish(ctx, image); err != nil {
 		log.Fatal().Err(err).Msg("failed to publish release")
 	}
+
+	if p.EmitDeploy {
+		ctx, span := otel.Tracer("").Start(ctx, "publish.Releases")
+		defer span.End()
+
+		carrier := propagation.MapCarrier{}
+		otel.GetTextMapPropagator().Inject(ctx, carrier)
+
+		detail := config.EventDetail{
+			Traceparent:    carrier["traceparent"],
+			Tracestate:     carrier["tracestate"],
+			Action:         "Deploy",
+			Sha:            buildtime.Sha.Decoded,
+			Branch:         buildtime.Branch.Decoded,
+			Origin:         buildtime.Origin.Decoded,
+			RepositoryName: buildtime.Computed.Repository.Name,
+		}
+
+		err := api.Bus.Emit(ctx, detail)
+
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to emit deploy event")
+		}
+	}
 }
 
 func DeployRelease(ctx context.Context, api sdk.API, p *param.Deploy) {
@@ -87,7 +104,7 @@ func DeployRelease(ctx context.Context, api sdk.API, p *param.Deploy) {
 		log.Fatal().Msg("enable and disable are mutually exclusive")
 	}
 
-	buildtime, err := api.Config.Find(p.FunctionArg.Path)
+	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
@@ -124,7 +141,7 @@ func DeployRelease(ctx context.Context, api sdk.API, p *param.Deploy) {
 }
 
 func DestroyDeployment(ctx context.Context, api sdk.API, p *param.Destroy) {
-	buildtime, err := api.Config.Find(p.FunctionArg.Path)
+	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
@@ -147,10 +164,36 @@ func DestroyDeployment(ctx context.Context, api sdk.API, p *param.Destroy) {
 	}
 }
 
+func UntagRelease(ctx context.Context, api sdk.API, p *param.Untag) {
+	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to find release schema")
+	}
+
+	err = api.Release.Untag(ctx, buildtime.Computed.Repository.Name, api.Config.Git.Branch)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to untag release")
+	}
+
+	if p.EmitDestroy {
+		err = api.Bus.Emit(ctx, config.EventDetail{
+			Action:         "Destroy",
+			Sha:            buildtime.Sha.Decoded,
+			Branch:         buildtime.Branch.Decoded,
+			Origin:         buildtime.Origin.Decoded,
+			RepositoryName: buildtime.Computed.Repository.Name,
+		})
+
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to emit destroy event")
+		}
+	}
+}
+
 func ListReleases(ctx context.Context, api sdk.API, p *param.Releases) {
 	t := table.New()
 
-	buildtime, err := api.Config.Find(p.FunctionArg.Path)
+	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
@@ -241,7 +284,7 @@ func PrintGlobalConfig(ctx context.Context, api sdk.API) {
 }
 
 func PrintDeployTime(ctx context.Context, api sdk.API, p *param.DeployTime) {
-	buildtime, err := api.Config.Find(p.FunctionArg.Path)
+	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find release schema")
 	}
@@ -251,7 +294,7 @@ func PrintDeployTime(ctx context.Context, api sdk.API, p *param.DeployTime) {
 		log.Fatal().Err(err).Msg("failed to find release")
 	}
 
-	deploytime, err := api.Config.Parse(release.Config.Labels)
+	deploytime, err := api.Config.DeployTime(release.Config.Labels)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to decode deploytime schema")
 	}
@@ -265,7 +308,7 @@ func PrintDeployTime(ctx context.Context, api sdk.API, p *param.DeployTime) {
 }
 
 func PrintBuildTime(ctx context.Context, api sdk.API, p *param.BuildTime) {
-	buildtime, err := api.Config.Find(p.FunctionArg.Path)
+	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to find buildtime schema")
 	}

@@ -66,7 +66,7 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error
 		return err
 	}
 
-	buildtime, err := c.Config.Parse(release.Config.Labels)
+	buildtime, err := c.Config.DeployTime(release.Config.Labels)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return err
@@ -90,7 +90,7 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 		return err
 	}
 
-	deploytime, err := c.Config.Parse(release.Config.Labels)
+	deploytime, err := c.Config.DeployTime(release.Config.Labels)
 	if err != nil {
 		return err
 	}
