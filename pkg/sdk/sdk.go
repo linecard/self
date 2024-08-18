@@ -2,12 +2,9 @@ package sdk
 
 import (
 	"context"
-	"net/http"
-	"time"
 
 	// config
 	"github.com/linecard/self/pkg/convention/config"
-	"github.com/linecard/self/pkg/convention/curl"
 
 	// services
 	"github.com/linecard/self/pkg/service/docker"
@@ -15,7 +12,6 @@ import (
 	"github.com/linecard/self/pkg/service/function"
 	"github.com/linecard/self/pkg/service/gateway"
 	"github.com/linecard/self/pkg/service/registry"
-	"github.com/linecard/self/pkg/service/sigv4"
 
 	// conventions
 	"github.com/linecard/self/pkg/convention/account"
@@ -43,7 +39,6 @@ type Clients struct {
 	IamClient          *iam.Client
 	EventBridgeClient  *eventbridge.Client
 	ApiGatewayV2Client *apigatewayv2.Client
-	Http               http.Client
 }
 
 type Services struct {
@@ -52,7 +47,6 @@ type Services struct {
 	Function function.Service
 	Event    event.Service
 	Gateway  gateway.Service
-	Sigv4    sigv4.Service
 }
 
 type Conventions struct {
@@ -62,7 +56,6 @@ type Conventions struct {
 	Deployment   deployment.Convention
 	Subscription bus.Convention
 	Httproxy     httproxy.Convention
-	Curl         curl.Convention
 }
 
 type API struct {
@@ -100,17 +93,11 @@ func InitConventions(ctx context.Context, config config.Config, services Service
 		Deployment:   deployment.FromServices(config, services.Function, services.Registry),
 		Subscription: bus.FromServices(config, services.Registry, services.Event),
 		Httproxy:     httproxy.FromServices(config, services.Gateway, services.Registry),
-		Curl:         curl.FromServices(config, services.Sigv4),
 	}, nil
 }
 
 func InitServices(ctx context.Context, clients Clients) (Services, error) {
 	docker, err := docker.FromPath(ctx)
-	if err != nil {
-		return Services{}, err
-	}
-
-	creds, err := clients.AwsConfig.Credentials.Retrieve(ctx)
 	if err != nil {
 		return Services{}, err
 	}
@@ -121,7 +108,6 @@ func InitServices(ctx context.Context, clients Clients) (Services, error) {
 		Function: function.FromClients(clients.LambdaClient, clients.IamClient),
 		Event:    event.FromClients(clients.EventBridgeClient, clients.LambdaClient),
 		Gateway:  gateway.FromClients(clients.ApiGatewayV2Client, clients.LambdaClient),
-		Sigv4:    sigv4.FromClients(creds, clients.AwsConfig.Region),
 	}, nil
 }
 
@@ -134,8 +120,5 @@ func InitClients(ctx context.Context, awsConfig aws.Config) (Clients, error) {
 		IamClient:          iam.NewFromConfig(awsConfig),
 		EventBridgeClient:  eventbridge.NewFromConfig(awsConfig),
 		ApiGatewayV2Client: apigatewayv2.NewFromConfig(awsConfig),
-		Http: http.Client{
-			Timeout: 30 * time.Second,
-		},
 	}, nil
 }

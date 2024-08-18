@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -278,22 +276,4 @@ func PrintBuildTime(ctx context.Context, api sdk.API, p *param.BuildTime) {
 	}
 
 	fmt.Println(string(out))
-}
-
-func CurlDeployment(ctx context.Context, api sdk.API, p *param.Curl) {
-	response, err := api.Curl.Signed(ctx, p.Method, p.Url, []byte(p.Data))
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to execute request")
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to read response body")
-	}
-
-	fmt.Println(string(body))
-
-	if response.StatusCode != 200 {
-		os.Exit(1)
-	}
 }

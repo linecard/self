@@ -21,7 +21,6 @@ type Root struct {
 	Releases    *param.Releases    `arg:"subcommand:releases" help:"List releases"`
 	Deployments *param.Deployments `arg:"subcommand:deployments" help:"List release deployments"`
 	Inspect     *param.Inspect     `arg:"subcommand:inspect" help:"Inspect config"`
-	Curl        *param.Curl        `arg:"subcommand:curl" help:"Curl a function"`
 }
 
 func (c Root) Route(ctx context.Context, api sdk.API) {
@@ -61,9 +60,6 @@ func (c Root) Route(ctx context.Context, api sdk.API) {
 		default:
 			arg.MustParse(&c).WriteHelpForSubcommand(os.Stdout, "inspect")
 		}
-
-	case c.Curl != nil:
-		method.CurlDeployment(ctx, api, c.Curl)
 
 	default:
 		arg.MustParse(&c).WriteHelp(os.Stdout)
