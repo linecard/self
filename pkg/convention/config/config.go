@@ -95,6 +95,7 @@ type Config struct {
 	Vpc          Vpc
 	TemplateData TemplateData
 	Version      string
+	AwsConfig    aws.Config
 }
 
 func (c Config) Find(buildPath string) (BuildTime, error) {
@@ -126,6 +127,8 @@ func (c Config) Parse(labels map[string]string) (DeployTime, error) {
 }
 
 func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClient, stsc STSClient) (err error) {
+	c.AwsConfig = awsConfig
+
 	if err = c.DiscoverGit(ctx); err != nil {
 		return
 	}
@@ -172,6 +175,8 @@ func (c *Config) FromCwd(ctx context.Context, awsConfig aws.Config, ecrc ECRClie
 }
 
 func (c *Config) FromEvent(ctx context.Context, awsConfig aws.Config, ecrc ECRClient, stsc STSClient, event events.ECRImageActionEvent) (err error) {
+	c.AwsConfig = awsConfig
+
 	if err = c.DiscoverCaller(ctx, stsc, awsConfig); err != nil {
 		return
 	}

@@ -3,8 +3,10 @@
 dist
 main
 justfile
-mockRepo
 result
+
 e2e/init/*
+e2e/bin/*
 !e2e/init/.gitkeep
+!e2e/bin/.gitkeep
 !e2e/justfile

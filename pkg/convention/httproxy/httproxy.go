@@ -66,13 +66,13 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error
 		return err
 	}
 
-	buildtime, err := c.Config.Parse(release.Config.Labels)
+	deploytime, err := c.Config.Parse(release.Config.Labels)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
-	if !buildtime.Computed.Resources.Http {
+	if !deploytime.Computed.Resources.Http {
 		return c.Unmount(ctx, d)
 	}
 
