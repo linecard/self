@@ -10,21 +10,25 @@ import (
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/sdk"
+	"go.opentelemetry.io/otel"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
-func Invoke(ctx context.Context) {
+func Invoke() {
 	var err error
 	var cfg config.Config
 	var api sdk.API
 	var stsc *sts.Client
+
+	ctx := context.Background()
+	ctx, span := otel.Tracer("").Start(ctx, "continuous-integration")
+	defer span.End()
 
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).With().Caller().Logger()
 
@@ -46,6 +50,22 @@ func Invoke(ctx context.Context) {
 	var root router.Root
 	arg.MustParse(&root)
 
+	configEnv(root)
+
+	if cfg, err = config.Stateful(ctx, awsConfig, stsc, ecrc); err != nil {
+		log.Fatal().Err(err).Msg("failed to load configuration from cwd")
+	}
+
+	if api, err = sdk.Init(ctx, awsConfig, cfg); err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize SDK")
+	}
+
+	if err := root.Route(ctx, api); err != nil {
+		log.Fatal().Err(err).Strs("argv", os.Args).Msgf("failed command")
+	}
+}
+
+func configEnv(root router.Root) {
 	if root.GlobalOpts.Branch != "" {
 		os.Setenv(config.EnvGitBranch, root.GlobalOpts.Branch)
 	}
@@ -83,14 +103,4 @@ func Invoke(ctx context.Context) {
 			strconv.FormatBool(root.GlobalOpts.OwnerPrefixRoutes),
 		)
 	}
-
-	if cfg, err = config.Stateful(ctx, awsConfig, stsc, ecrc); err != nil {
-		log.Fatal().Err(err).Msg("failed to load configuration from cwd")
-	}
-
-	if api, err = sdk.Init(ctx, awsConfig, cfg); err != nil {
-		log.Fatal().Err(err).Msg("failed to initialize SDK")
-	}
-
-	root.Route(ctx, api)
 }

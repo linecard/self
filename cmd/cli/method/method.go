@@ -15,54 +15,61 @@ import (
 	dtype "github.com/linecard/self/pkg/convention/deployment"
 	"github.com/linecard/self/pkg/sdk"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/rs/zerolog/log"
 )
 
-func InitFunction(ctx context.Context, api sdk.API, p *param.Init) {
+func InitFunction(ctx context.Context, api sdk.API, p *param.Init) error {
 	if err := api.Account.Config.Scaffold(p.Scaffold, p.Name); err != nil {
-		log.Fatal().Err(err).Msg("failed to scaffold function")
+		return err
 	}
+	return nil
 }
 
-func BuildRelease(ctx context.Context, api sdk.API, p *param.Build) {
+func BuildRelease(ctx context.Context, api sdk.API, p *param.Build) error {
 	if p.Context == "" {
 		p.Context = p.Path
 	}
 
 	image, _, err := api.Release.Build(ctx, p.Path, p.Context)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to build release")
+		return err
 	}
 
 	if p.Run {
 		if err := api.Runtime.Emulate(ctx, image); err != nil {
-			log.Fatal().Err(err).Msg("failed to emulate runtime")
+			return err
 		}
 	}
+
+	return nil
 }
 
-func PublishRelease(ctx context.Context, api sdk.API, p *param.Publish) {
+func PublishRelease(ctx context.Context, api sdk.API, p *param.Publish) error {
+	ctx, span := otel.Tracer("").Start(ctx, "release")
+	defer span.End()
+
 	if p.Context == "" {
 		p.Context = p.Path
 	}
 
 	if p.Login {
 		if err := api.Account.LoginToEcr(ctx); err != nil {
-			log.Fatal().Err(err).Msg("failed to login to ECR")
+			return err
 		}
 	}
 
 	image, buildtime, err := api.Release.Build(ctx, p.Path, p.Context)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to build release")
+		return err
 	}
 
 	if p.EnsureRepository {
 		if err := api.Release.EnsureRepository(ctx, buildtime.Computed.Repository.Name); err != nil {
-			log.Fatal().Err(err).Msg("failed to ensure ECR repository")
+			return err
 		}
 	}
 
@@ -71,11 +78,11 @@ func PublishRelease(ctx context.Context, api sdk.API, p *param.Publish) {
 	}
 
 	if err := api.Release.Publish(ctx, image); err != nil {
-		log.Fatal().Err(err).Msg("failed to publish release")
+		return err
 	}
 
 	if p.EmitDeploy {
-		ctx, span := otel.Tracer("").Start(ctx, "publish.Releases")
+		ctx, span := otel.Tracer("").Start(ctx, "notify")
 		defer span.End()
 
 		carrier := propagation.MapCarrier{}
@@ -89,118 +96,147 @@ func PublishRelease(ctx context.Context, api sdk.API, p *param.Publish) {
 			Branch:         buildtime.Branch.Decoded,
 			Origin:         buildtime.Origin.Decoded,
 			RepositoryName: buildtime.Computed.Repository.Name,
+			ResourceName:   buildtime.Computed.Resource.Name,
 		}
 
-		err := api.Bus.Emit(ctx, detail)
-
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to emit deploy event")
+		if err := api.Bus.Emit(ctx, detail); err != nil {
+			return err
 		}
 	}
+
+	return nil
 }
 
-func DeployRelease(ctx context.Context, api sdk.API, p *param.Deploy) {
+func DeployRelease(ctx context.Context, api sdk.API, p *param.Deploy) error {
 	if p.Enable && p.Disable {
-		log.Fatal().Msg("enable and disable are mutually exclusive")
+		log.Fatal().Msg("--enable and --disable are mutually exclusive")
 	}
 
 	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to find release schema")
+		return err
 	}
 
 	release, err := api.Release.Find(ctx, buildtime.Computed.Repository.Name, api.Config.Git.Branch)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to find release")
+		return err
 	}
 
 	deployment, err := api.Deployment.Deploy(ctx, release)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to deploy release")
+		return err
 	}
 
 	if p.Enable {
 		if err = api.Subscription.EnableAll(ctx, deployment); err != nil {
-			log.Fatal().Err(err).Msg("failed to enable subscriptions")
+			return err
 		}
 	}
 
 	if p.Disable {
 		if err = api.Subscription.DisableAll(ctx, deployment); err != nil {
-			log.Fatal().Err(err).Msg("failed to disable subscriptions")
+			return err
 		}
 	}
 
 	if err = api.Subscription.Converge(ctx, deployment); err != nil {
-		log.Fatal().Err(err).Msg("failed to converge subscriptions")
+		return err
 	}
 
 	if err = api.Httproxy.Converge(ctx, deployment); err != nil {
-		log.Fatal().Err(err).Msg("failed to converge gateway httproxy")
+		return err
 	}
+
+	return nil
 }
 
-func DestroyDeployment(ctx context.Context, api sdk.API, p *param.Destroy) {
+func DestroyDeployment(ctx context.Context, api sdk.API, p *param.Destroy) error {
 	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to find release schema")
+		return err
 	}
 
 	deployment, err := api.Deployment.Find(ctx, buildtime.Computed.Resource.Name)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to find deployment")
+		return err
 	}
 
 	if err = api.Httproxy.Unmount(ctx, deployment); err != nil {
-		log.Fatal().Err(err).Msg("failed to unmount gateway httproxy")
+		return err
 	}
 
 	if err = api.Subscription.DisableAll(ctx, deployment); err != nil {
-		log.Fatal().Err(err).Msg("failed to disable subscriptions")
+		return err
 	}
 
 	if err = api.Deployment.Destroy(ctx, deployment); err != nil {
-		log.Fatal().Err(err).Msg("failed to destroy deployment")
+		return err
 	}
+
+	return nil
 }
 
-func UntagRelease(ctx context.Context, api sdk.API, p *param.Untag) {
+func UntagRelease(ctx context.Context, api sdk.API, p *param.Untag) error {
+	ctx, span := otel.Tracer("").Start(ctx, "release")
+	defer span.End()
+
 	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to find release schema")
+		return err
 	}
+
+	span.SetAttributes(
+		attribute.String("branch", buildtime.Branch.Decoded),
+		attribute.String("sha", buildtime.Sha.Decoded),
+		attribute.String("origin", buildtime.Origin.Decoded),
+		attribute.String("repository", buildtime.Computed.Repository.Name),
+		attribute.String("resource", buildtime.Computed.Resource.Name),
+	)
 
 	err = api.Release.Untag(ctx, buildtime.Computed.Repository.Name, api.Config.Git.Branch)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to untag release")
+		return err
 	}
 
 	if p.EmitDestroy {
-		err = api.Bus.Emit(ctx, config.EventDetail{
+		ctx, span := otel.Tracer("").Start(ctx, "notify")
+		defer span.End()
+
+		carrier := propagation.MapCarrier{}
+		otel.GetTextMapPropagator().Inject(ctx, carrier)
+
+		detail := config.EventDetail{
+			Traceparent:    carrier["traceparent"],
+			Tracestate:     carrier["tracestate"],
 			Action:         "Destroy",
 			Sha:            buildtime.Sha.Decoded,
 			Branch:         buildtime.Branch.Decoded,
 			Origin:         buildtime.Origin.Decoded,
 			RepositoryName: buildtime.Computed.Repository.Name,
-		})
+			ResourceName:   buildtime.Computed.Resource.Name,
+		}
+
+		err := api.Bus.Emit(ctx, detail)
 
 		if err != nil {
-			log.Fatal().Err(err).Msg("failed to emit destroy event")
+			return err
 		}
 	}
+
+	return nil
 }
 
-func ListReleases(ctx context.Context, api sdk.API, p *param.Releases) {
+func ListReleases(ctx context.Context, api sdk.API, p *param.Releases) error {
 	t := table.New()
 
 	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to find release schema")
+		return err
 	}
 
 	releases, err := api.Release.List(ctx, buildtime.Computed.Repository.Name)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to list releases")
+		return err
 	}
 
 	t.Headers("HEAD", "SHA", "DIGEST", "RELEASED")
@@ -214,16 +250,17 @@ func ListReleases(ctx context.Context, api sdk.API, p *param.Releases) {
 	}
 
 	fmt.Println(t.Render())
+	return nil
 }
 
-func ListDeployments(ctx context.Context, api sdk.API, p *param.Deployments) {
+func ListDeployments(ctx context.Context, api sdk.API, p *param.Deployments) error {
 	var wg sync.WaitGroup
 	t := table.New()
 
 	branchFilter := api.Config.Resource.Namespace + "-" + api.Config.Git.Branch
 	deployments, err := api.Deployment.List(ctx, branchFilter)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to list deployments")
+		return err
 	}
 
 	t.Headers("Deployment", "HEAD", "SHA", "DIGEST", "ENABLED", "ROUTE", "DEPLOYED")
@@ -231,13 +268,14 @@ func ListDeployments(ctx context.Context, api sdk.API, p *param.Deployments) {
 	wg.Add(len(deployments))
 
 	for _, deployment := range deployments {
-		go func(each dtype.Deployment) {
+		go func(each dtype.Deployment) error {
 			defer wg.Done()
 			var enabled bool
+			var err error
 
 			subscriptions, err := api.Subscription.List(ctx, each)
 			if err != nil {
-				log.Fatal().Err(err).Msg("failed to list subscriptions")
+				log.Warn().Err(err).Msg("error while to listing subscriptions")
 			}
 
 			for _, subscription := range subscriptions {
@@ -249,7 +287,7 @@ func ListDeployments(ctx context.Context, api sdk.API, p *param.Deployments) {
 
 			routes, err := api.Httproxy.UnsafeListRoutes(ctx, each)
 			if err != nil {
-				log.Fatal().Err(err).Msg("failed to list routes")
+				log.Warn().Err(err).Msg("error while to listing routes")
 			}
 
 			var routeKeys []string
@@ -266,57 +304,63 @@ func ListDeployments(ctx context.Context, api sdk.API, p *param.Deployments) {
 				strings.Join(routeKeys, ", "),
 				carbon.Parse(*each.Configuration.LastModified).DiffForHumans(),
 			)
+
+			return nil
 		}(deployment)
 	}
 
 	wg.Wait()
 
 	fmt.Println(t.Render())
+	return nil
 }
 
-func PrintGlobalConfig(ctx context.Context, api sdk.API) {
+func PrintGlobalConfig(ctx context.Context, api sdk.API) error {
 	cJson, err := json.Marshal(api.Config)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to marshal config")
+		return err
 	}
 
 	fmt.Println(string(cJson))
+	return nil
 }
 
-func PrintDeployTime(ctx context.Context, api sdk.API, p *param.DeployTime) {
+func PrintDeployTime(ctx context.Context, api sdk.API, p *param.DeployTime) error {
 	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to find release schema")
+		return err
 	}
 
 	release, err := api.Release.Find(ctx, buildtime.Computed.Repository.Name, api.Config.Git.Branch)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to find release")
+		return err
 	}
 
 	deploytime, err := api.Config.DeployTime(release.Config.Labels)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to decode deploytime schema")
+		return err
 	}
 
 	out, err := json.Marshal(deploytime)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to marshal deploytime schema")
+		return err
 	}
 
 	fmt.Println(string(out))
+	return nil
 }
 
-func PrintBuildTime(ctx context.Context, api sdk.API, p *param.BuildTime) {
+func PrintBuildTime(ctx context.Context, api sdk.API, p *param.BuildTime) error {
 	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to find buildtime schema")
+		return err
 	}
 
 	out, err := json.Marshal(buildtime)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to marshal buildtime schema")
+		return err
 	}
 
 	fmt.Println(string(out))
+	return nil
 }

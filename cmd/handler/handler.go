@@ -2,9 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
-	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/sdk"
 
@@ -14,17 +14,41 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-lambda-go/otellambda"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 )
+
+func eventToCarrierMapper(eventJSON []byte) propagation.TextMapCarrier {
+	var event config.Event
+
+	log.Info().Msg("mapping event to carrier")
+
+	err := json.Unmarshal(eventJSON, &event)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to unmarshal event")
+		return propagation.MapCarrier{} // Return empty carrier if event parsing fails
+	}
+
+	// Populate the carrier with traceparent and tracestate
+	carrier := propagation.MapCarrier{}
+	if event.Detail.Traceparent != "" {
+		carrier.Set("traceparent", event.Detail.Traceparent)
+	}
+	if event.Detail.Tracestate != "" {
+		carrier.Set("tracestate", event.Detail.Tracestate)
+	}
+
+	return carrier
+}
 
 // Listen for events from the AWS Lambda runtime.
 func Listen(tp *sdktrace.TracerProvider) {
 	instrumented := otellambda.InstrumentHandler(Handler,
 		otellambda.WithTracerProvider(tp),
 		otellambda.WithFlusher(tp),
+		otellambda.WithEventToCarrier(eventToCarrierMapper),
 	)
 
 	lambda.Start(instrumented)
@@ -34,43 +58,29 @@ func Handler(ctx context.Context, event config.Event) (err error) {
 	var cfg config.Config
 	var api sdk.API
 
-	// attempt to associate trace with originating publish/untag emitted events.
-	if event.Detail.Traceparent != "" {
-		carrier := propagation.MapCarrier{
-			"traceparent": event.Detail.Traceparent,
-			"tracestate":  event.Detail.Tracestate,
-		}
-
-		propagator := propagation.TraceContext{}
-		ctx = propagator.Extract(ctx, carrier)
+	span := trace.SpanFromContext(ctx)
+	if span.SpanContext().IsValid() {
+		span.SetName("continuous-deployment")
 	}
-
-	ctx, span := otel.Tracer("").Start(ctx, "handler")
-	defer span.End()
 
 	awsConfig, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to load AWS configuration")
+		span.SetStatus(codes.Code(codes.Error), "failed to load AWS configuration")
+		return err
 	}
 
 	stsc := sts.NewFromConfig(awsConfig)
 	ecrc := ecr.NewFromConfig(awsConfig)
 
 	if cfg, err = config.Stateless(ctx, awsConfig, stsc, ecrc, event); err != nil {
-		msg := "failed to load configuration from event"
-		span.SetStatus(codes.Code(codes.Error), msg)
-		log.Fatal().Err(err).Msg(msg)
+		span.SetStatus(codes.Code(codes.Error), "failed to load configuration from event")
+		return
 	}
 
 	if api, err = sdk.Init(ctx, awsConfig, cfg); err != nil {
-		msg := "failed to initialize SDK"
-		span.SetStatus(codes.Code(codes.Error), msg)
-		log.Fatal().Err(err).Msg(msg)
+		span.SetStatus(codes.Code(codes.Error), "failed to initialize SDK")
+		return
 	}
-
-	log.Info().Msgf("received event: %s", event.DetailType)
-	log.Info().Msgf("repository: %s", event.Detail.RepositoryName)
-	log.Info().Msgf("branch: %s", event.Detail.Branch)
 
 	switch event.DetailType {
 	case "Deploy":
@@ -83,9 +93,6 @@ func Handler(ctx context.Context, event config.Event) (err error) {
 }
 
 func Deploy(ctx context.Context, api sdk.API, detail config.EventDetail) (err error) {
-	ctx, span := otel.Tracer("").Start(ctx, "Deploy")
-	defer span.End()
-
 	release, err := api.Release.Find(ctx, detail.RepositoryName, detail.Branch)
 	if err != nil {
 		return fmt.Errorf("failed to find release: %v", err)
@@ -109,10 +116,7 @@ func Deploy(ctx context.Context, api sdk.API, detail config.EventDetail) (err er
 }
 
 func Destroy(ctx context.Context, api sdk.API, event config.EventDetail) error {
-	ctx, span := otel.Tracer("").Start(ctx, "Destroy")
-	defer span.End()
-
-	deployment, err := api.Deployment.Find(ctx, util.DeSlasher(event.RepositoryName))
+	deployment, err := api.Deployment.Find(ctx, event.ResourceName)
 	if err != nil {
 		return fmt.Errorf("failed to find deployment: %v", err)
 	}

@@ -4,10 +4,13 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/linecard/self/internal/gitlib"
+	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/manifest"
 )
 
@@ -103,6 +106,25 @@ func Stateful(ctx context.Context, awsConfig aws.Config, stsc STSClient, ecrc EC
 		return
 	}
 
+	// This block happens in Stateless as well, needs DRY-ing.
+	// Conceptually it's the Computed values of the root Config.
+	nameSpace := strings.TrimSuffix(c.Git.Origin.Path, ".git")
+	c.Repository.Namespace = strings.TrimPrefix(nameSpace, "/")
+
+	if value, exists := os.LookupEnv(EnvOwnerPrefixResources); exists {
+		if strings.ToLower(value) == "true" {
+			c.Resource.Namespace = util.DeSlasher(nameSpace)
+		}
+	} else {
+		noOwner := strings.Split(util.DeSlasher(nameSpace), "-")[1:]
+		c.Resource.Namespace = strings.Join(noOwner, "-")
+	}
+
+	c.TemplateData.AccountId = c.Account.Id
+	c.TemplateData.Region = c.Account.Region
+	c.TemplateData.RegistryRegion = c.Registry.Region
+	c.TemplateData.RegistryAccountId = c.Registry.Id
+
 	return
 }
 
@@ -115,6 +137,23 @@ func Stateless(ctx context.Context, awsConfig aws.Config, stsc STSClient, ecrc E
 	if err = c.FromEvent(ctx, event); err != nil {
 		return
 	}
+
+	nameSpace := strings.TrimSuffix(c.Git.Origin.Path, ".git")
+	c.Repository.Namespace = strings.TrimPrefix(nameSpace, "/")
+
+	if value, exists := os.LookupEnv(EnvOwnerPrefixResources); exists {
+		if strings.ToLower(value) == "true" {
+			c.Resource.Namespace = util.DeSlasher(nameSpace)
+		}
+	} else {
+		noOwner := strings.Split(util.DeSlasher(nameSpace), "-")[1:]
+		c.Resource.Namespace = strings.Join(noOwner, "-")
+	}
+
+	c.TemplateData.AccountId = c.Account.Id
+	c.TemplateData.Region = c.Account.Region
+	c.TemplateData.RegistryRegion = c.Registry.Region
+	c.TemplateData.RegistryAccountId = c.Registry.Id
 
 	return
 }

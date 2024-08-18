@@ -10,7 +10,7 @@ import (
 func main() {
 	util.SetLogLevel()
 
-	ctx, tp, shutdown := tracing.InitOtel()
+	tp, shutdown := tracing.InitOtel()
 	defer shutdown()
 
 	if util.InLambda() {
@@ -18,5 +18,5 @@ func main() {
 		return
 	}
 
-	cli.Invoke(ctx)
+	cli.Invoke()
 }

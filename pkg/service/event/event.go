@@ -123,8 +123,8 @@ func (s Service) Emit(ctx context.Context, accountId, busName, detailType string
 	ackBytes, _ := json.Marshal(ack)
 
 	log.Info().
-		Str("entries", string(entyBytes)).
-		Str("ack", string(ackBytes)).
+		RawJSON("entries", entyBytes).
+		RawJSON("ack", ackBytes).
 		Msg("emitted event")
 
 	return err

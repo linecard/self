@@ -14,4 +14,5 @@ type EventDetail struct {
 	Branch         string `json:"branch"`
 	Origin         string `json:"origin"`
 	RepositoryName string `json:"repository-name"`
+	ResourceName   string `json:"resource-name"`
 }

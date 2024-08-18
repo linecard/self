@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/rs/zerolog/log"
@@ -79,9 +80,15 @@ func (s Service) InspectByTag(ctx context.Context, registryUrl, repository, tag 
 }
 
 func (s Service) Build(ctx context.Context, functionPath, contextPath string, labels map[string]string, tags []string) error {
-	envs := []string{
-		"DOCKER_BUILDKIT=1",
+	var envs []string
+
+	for _, env := range os.Environ() {
+		if !strings.HasPrefix(env, "OTEL_") {
+			envs = append(envs, env)
+		}
 	}
+
+	envs = append(envs, "DOCKER_BUILDKIT=1")
 
 	args := []string{
 		"build",
@@ -99,7 +106,7 @@ func (s Service) Build(ctx context.Context, functionPath, contextPath string, la
 	args = append(args, contextPath)
 
 	cmd := exec.CommandContext(ctx, s.Binary, args...)
-	cmd.Env = append(os.Environ(), envs...)
+	cmd.Env = envs
 	cmd.Stderr = os.Stderr
 
 	_, err := cmd.Output()

@@ -12,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/linecard/self/internal/gitlib"
-	"github.com/linecard/self/internal/util"
 )
 
 type STSClient interface {
@@ -40,11 +39,6 @@ func (c *Config) FromAws(ctx context.Context, awsConfig aws.Config, stsc STSClie
 	if err = c.discoverVpc(); err != nil {
 		return
 	}
-
-	c.TemplateData.AccountId = c.Account.Id
-	c.TemplateData.Region = c.Account.Region
-	c.TemplateData.RegistryRegion = c.Registry.Region
-	c.TemplateData.RegistryAccountId = c.Registry.Id
 
 	return nil
 }
@@ -150,18 +144,6 @@ func (c *Config) discoverGit() (err error) {
 
 	if value, exists := os.LookupEnv(EnvGitSha); exists {
 		c.Git.Sha = value
-	}
-
-	nameSpace := strings.TrimSuffix(c.Git.Origin.Path, ".git")
-	c.Repository.Namespace = strings.TrimPrefix(nameSpace, "/")
-
-	if value, exists := os.LookupEnv(EnvOwnerPrefixResources); exists {
-		if strings.ToLower(value) == "true" {
-			c.Resource.Namespace = util.DeSlasher(nameSpace)
-		}
-	} else {
-		noOwner := strings.Split(util.DeSlasher(nameSpace), "-")[1:]
-		c.Resource.Namespace = strings.Join(noOwner, "-")
 	}
 
 	return err

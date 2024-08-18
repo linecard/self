@@ -8,14 +8,14 @@ import (
 
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/smithy-go"
 	"github.com/docker/docker/api/types"
 	"github.com/golang-module/carbon/v2"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
 )
 
 type RegistryService interface {
@@ -76,18 +76,23 @@ func FromServices(c config.Config, r RegistryService, b BuildService) Convention
 }
 
 func (c Convention) Find(ctx context.Context, repositoryName, tag string) (Release, error) {
-	ctx, span := otel.Tracer("").Start(ctx, "release.Find")
+	ctx, span := otel.Tracer("").Start(ctx, "find")
 	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("registry-url", c.Config.Registry.Url),
+		attribute.String("registry-id", c.Config.Registry.Id),
+		attribute.String("repository-name", repositoryName),
+		attribute.String("tag", tag),
+	)
 
 	inspect, err := c.Service.Registry.InspectByTag(ctx, c.Config.Registry.Id, repositoryName, tag)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err
 	}
 
 	uri, err := c.Service.Registry.ImageUri(ctx, c.Config.Registry.Id, c.Config.Registry.Url, repositoryName, tag)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return Release{}, err
 	}
 
@@ -102,6 +107,13 @@ func (c Convention) Find(ctx context.Context, repositoryName, tag string) (Relea
 	default:
 		return Release{}, fmt.Errorf("unsupported architecture %s", inspect.Architecture)
 	}
+
+	span.SetAttributes(
+		attribute.String("image-id", inspect.ID),
+		attribute.StringSlice("image-digest", inspect.RepoDigests),
+		attribute.StringSlice("image-tags", inspect.RepoTags),
+		attribute.String("image-uri", uri),
+	)
 
 	return Release{Image{inspect}, uri, awsArch}, nil
 }
@@ -138,7 +150,7 @@ func (c Convention) List(ctx context.Context, repositoryName string) ([]ReleaseS
 }
 
 func (c Convention) Build(ctx context.Context, path, context string) (Image, config.BuildTime, error) {
-	ctx, span := otel.Tracer("").Start(ctx, "release.Build")
+	ctx, span := otel.Tracer("").Start(ctx, "build")
 	defer span.End()
 
 	buildtime, err := c.Config.BuildTime(path)
@@ -156,6 +168,16 @@ func (c Convention) Build(ctx context.Context, path, context string) (Image, con
 			buildtime.Sha.Decoded,
 		),
 	}
+
+	span.SetAttributes(
+		attribute.String("build-path", path),
+		attribute.String("build-context", context),
+		attribute.String("branch", buildtime.Branch.Decoded),
+		attribute.String("sha", buildtime.Sha.Decoded),
+		attribute.String("origin", buildtime.Origin.Decoded),
+		attribute.Bool("dirty", c.Config.Git.Dirty),
+		attribute.StringSlice("tags", tags),
+	)
 
 	err = c.Service.Build.Build(
 		ctx,
@@ -184,8 +206,14 @@ func (c Convention) Build(ctx context.Context, path, context string) (Image, con
 }
 
 func (c Convention) Publish(ctx context.Context, i Image) error {
-	ctx, span := otel.Tracer("").Start(ctx, "release.Publish")
+	ctx, span := otel.Tracer("").Start(ctx, "publish")
 	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("image-id", i.ID),
+		attribute.StringSlice("image-digest", i.RepoDigests),
+		attribute.StringSlice("image-tags", i.RepoTags),
+	)
 
 	// This is a very fuzzy validation. Catches issues with messy commits and mutable tagging ecr-side.
 	if len(i.RepoTags) != 2 {
@@ -205,8 +233,15 @@ func (c Convention) Publish(ctx context.Context, i Image) error {
 }
 
 func (c Convention) Untag(ctx context.Context, repositoryName, tag string) error {
-	ctx, span := otel.Tracer("").Start(ctx, "release.Untag")
+	ctx, span := otel.Tracer("").Start(ctx, "untag")
 	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("registry-url", c.Config.Registry.Url),
+		attribute.String("registry-id", c.Config.Registry.Id),
+		attribute.String("repository-name", repositoryName),
+		attribute.String("tag", tag),
+	)
 
 	return c.Service.Registry.Untag(ctx, c.Config.Registry.Id, repositoryName, tag)
 }
