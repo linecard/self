@@ -39,6 +39,7 @@ build:
 # initialize, publish, deploy
 up: build
     #! /usr/bin/env bash
+    set -e
     for lang in ruby python node go; do
         just init $lang
         just publish $lang
@@ -48,6 +49,7 @@ up: build
 # run infrastructure tests
 smoke:
     #! /usr/bin/env bash
+    set -e
     for lang in ruby python node go; do
         just test $lang
     done
@@ -55,6 +57,7 @@ smoke:
 # destroy and clean up
 down:
     #! /usr/bin/env bash
+    set -e
     for lang in ruby python node go; do
         just destroy $lang
         just clean $lang
