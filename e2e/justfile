@@ -1,31 +1,43 @@
-export AWS_API_GATEWAY_ID := "vas86x7yjc"
-export AWS_REGION := "us-west-2"
-export AWS_PROFILE := "linecard"
+export SELF_API_GATEWAY_ID := "vas86x7yjc"
+export SELF_API_GATEWAY_AUTH_TYPE := "JWT"
+export SELF_API_GATEWAY_AUTHORIZER_ID := "c0bsen"
+export PATH := x'$PWD/bin:${PATH}'
 
 [private]
 default:
     just --list
 
+[private]
 init lang:
     self init {{ lang }} init/testing-{{ lang }}
     cp -r fixtures/bus init/testing-{{ lang }}/
 
+[private]
 publish lang:
     self publish init/testing-{{ lang }} --ecr-login
 
+[private]
 deploy lang:
     self deploy init/testing-{{ lang }}
 
+[private]
 test lang:
     FUNCTION_PATH=init/testing-{{lang}} bundler exec -- rspec -f d
 
+[private]
 destroy lang:
     self destroy init/testing-{{ lang }}
 
+[private]
 clean lang:
     rm -rf init/testing-{{ lang }}
 
-up build:
+[private]
+build:
+    go build -o bin/self ../cmd/self/main.go
+
+# initialize, publish, deploy
+up: build
     #! /usr/bin/env bash
     for lang in ruby python node go; do
         just init $lang
@@ -33,16 +45,19 @@ up build:
         just deploy $lang
     done
 
+# run infrastructure tests
 smoke:
     #! /usr/bin/env bash
     for lang in ruby python node go; do
         just test $lang
     done
 
+# destroy and clean up
 down:
     #! /usr/bin/env bash
     for lang in ruby python node go; do
         just destroy $lang
         just clean $lang
     done
+    rm -rf bin/*
 
