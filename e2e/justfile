@@ -1,4 +1,6 @@
 export AWS_API_GATEWAY_ID := "vas86x7yjc"
+export AWS_REGION := "us-west-2"
+export AWS_PROFILE := "linecard"
 
 [private]
 default:
@@ -23,7 +25,7 @@ destroy lang:
 clean lang:
     rm -rf init/testing-{{ lang }}
 
-up:
+up build:
     #! /usr/bin/env bash
     for lang in ruby python node go; do
         just init $lang

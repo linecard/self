@@ -29,10 +29,11 @@ type Build struct {
 }
 
 type Publish struct {
-	Login            bool `arg:"-l,--ecr-login" help:"Login to ECR"`
-	EnsureRepository bool `arg:"--ensure-repository" help:"Ensure ECR repository exists"`
-	Force            bool `arg:"-f,--force" help:"Override dirty commit protection"`
-	EmitDeploy       bool `arg:"--emit-deploy" help:"Emit deploy event"`
+	Login            bool     `arg:"-l,--ecr-login" help:"Login to ECR"`
+	EnsureRepository bool     `arg:"--ensure-repository" help:"Ensure ECR repository exists"`
+	Force            bool     `arg:"-f,--force" help:"Override dirty commit protection"`
+	EmitDeploy       bool     `arg:"--emit-deploy" help:"Emit deploy event"`
+	ExceptAccounts   []string `arg:"--except" help:"Exclude deployment to these accounts when emitting deploy event"`
 	Build
 }
 

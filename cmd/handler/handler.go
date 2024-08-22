@@ -82,6 +82,13 @@ func Handler(ctx context.Context, event config.Event) (err error) {
 		return
 	}
 
+	for _, account := range event.Detail.ExceptAccounts {
+		if account == cfg.Account.Id {
+			log.Info().Msg("skipping deployment to account as instructed by event")
+			return nil
+		}
+	}
+
 	switch event.DetailType {
 	case "Deploy":
 		return Deploy(ctx, api, event.Detail)

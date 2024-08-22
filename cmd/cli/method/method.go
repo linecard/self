@@ -97,6 +97,7 @@ func PublishRelease(ctx context.Context, api sdk.API, p *param.Publish) error {
 			Origin:         buildtime.Origin.Decoded,
 			RepositoryName: buildtime.Computed.Repository.Name,
 			ResourceName:   buildtime.Computed.Resource.Name,
+			ExceptAccounts: p.ExceptAccounts,
 		}
 
 		if err := api.Bus.Emit(ctx, detail); err != nil {
