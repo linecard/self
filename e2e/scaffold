@@ -3,7 +3,7 @@
 export SELF_API_GATEWAY_ID := "vas86x7yjc"
 export SELF_API_GATEWAY_AUTH_TYPE := "AWS_IAM"
 export PATH := x'$PWD/bin:${PATH}'
-scaffolds := "{{ scaffolds }}"
+scaffolds := "go node python ruby"
 
 [private]
 @default:
@@ -14,39 +14,38 @@ build:
     go build -o bin/self ../cmd/self/main.go
 
 # Initialize all scaffolds
+[private]
 init:
     #! /usr/bin/env bash
     set -e
     for scaffold in {{ scaffolds }}; do
+        echo "initializing $scaffold"
         self init $scaffold init/testing-$scaffold
         cp -r fixtures/bus init/testing-$scaffold/
     done
 
 # Publish all scaffolds
+[private]
 publish:
     #! /usr/bin/env bash
     set -e
     for scaffold in {{ scaffolds }}; do
+        echo "publishing $scaffold"
         self publish init/testing-$scaffold --ecr-login
     done
 
 # Deploy all scaffolds
+[private]
 deploy:
     #! /usr/bin/env bash
     set -e
     for scaffold in {{ scaffolds }}; do
+        echo "deploying $scaffold"
         self deploy init/testing-$scaffold
     done
 
-# Test all scaffolds
-test:
-    #! /usr/bin/env bash
-    set -e
-    for scaffold in {{ scaffolds }}; do
-        FUNCTION_PATH=init/testing-$scaffold bundler exec -- rspec -f d
-    done
-
 # Destroy all scaffolds
+[private]
 destroy:
     #! /usr/bin/env bash
     set -e
@@ -55,11 +54,24 @@ destroy:
     done
 
 # Clean up all scaffolds
+[private]
 clean:
     #! /usr/bin/env bash
     set -e
     rm -rf init/*
     rm -rf bin/*
 
-# run e2e suite for scaffolds
-e2e: build init publish deploy test destroy clean
+# Setup
+setup: build init publish deploy
+
+# Test
+test:
+    #! /usr/bin/env bash
+    set -e
+    for scaffold in {{ scaffolds }}; do
+        FUNCTION_PATH=init/testing-$scaffold bundler exec -- rspec -f d
+    done
+
+# Teardown
+teardown: destroy clean
+
