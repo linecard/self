@@ -23,8 +23,8 @@
                 "iam:*"
             ],
             "Resource": [
-                "arn:aws:iam::{{"{{"}} .AccountId {{"}}"}}:policy/{{ .Resource.Prefix }}-*",
-                "arn:aws:iam::{{"{{"}} .AccountId {{"}}"}}:role/{{ .Resource.Prefix }}-*"
+                "arn:aws:iam::{{"{{"}} .Account.Id {{"}}"}}:policy/{{ .Resource.Namespace }}-*",
+                "arn:aws:iam::{{"{{"}} .Account.Id {{"}}"}}:role/{{ .Resource.Namespace }}-*"
             ]
         },
         {
@@ -34,7 +34,7 @@
                 "lambda:*"
             ],
             "Resource": [
-                "arn:aws:lambda:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .AccountId {{"}}"}}:function:{{ .Resource.Prefix }}-*"
+                "arn:aws:lambda:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .AccountId {{"}}"}}:function:{{ .Resource.Namespace }}-*"
             ]
         },
         {
@@ -44,7 +44,7 @@
                 "ecr:*"
             ],
             "Resource": [
-                "arn:aws:ecr:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .RegistryAccountId {{"}}"}}:repository/{{ .Repository.Prefix }}/*"
+                "arn:aws:ecr:{{"{{"}} .RegistryRegion {{"}}"}}:{{"{{"}} .RegistryAccountId {{"}}"}}:repository/{{ .Repository.Namespace }}/*"
             ]
         },
         {
@@ -57,24 +57,22 @@
                 "events:PutTargets"
             ],
             "Resource": [
-                "arn:aws:events:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .AccountId {{"}}"}}:rule/{{ .Resource.Prefix }}-*"
+                "arn:aws:events:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .AccountId {{"}}"}}:rule/{{ .Resource.Namespace }}-*"
             ]
         },
         {
             "Sid": "AllowAPIGatewayAccess",
             "Effect": "Allow",
             "Action": [
-                "apigateway:GET",
                 "apigateway:POST",
                 "apigateway:DELETE",
                 "apigateway:PATCH"
             ],
             "Resource": [
-                "arn:aws:apigateway:*::/apis",
-                "arn:aws:apigateway:*::/apis/*/routes",
-                "arn:aws:apigateway:*::/apis/*/routes/*",
-                "arn:aws:apigateway:*::/apis/*/integrations",
-                "arn:aws:apigateway:*::/apis/*/integrations/*"
+                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/routes",
+                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/routes/*",
+                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/integrations",
+                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/integrations/*"
             ]
         }
     ]

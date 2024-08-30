@@ -65,6 +65,7 @@ func Invoke() {
 	}
 }
 
+// Take options given to the CLI and export them to their respective environment variables.
 func configEnv(root router.Root) {
 	if root.GlobalOpts.Branch != "" {
 		os.Setenv(config.EnvGitBranch, root.GlobalOpts.Branch)
@@ -102,5 +103,9 @@ func configEnv(root router.Root) {
 			config.EnvOwnerPrefixRoutes,
 			strconv.FormatBool(root.GlobalOpts.OwnerPrefixRoutes),
 		)
+	}
+
+	if root.GlobalOpts.SelfBusName != "" {
+		os.Setenv(config.EnvBusName, root.GlobalOpts.SelfBusName)
 	}
 }

@@ -62,7 +62,10 @@ func FromServices(c config.Config, r RegistryService, e EventService) Convention
 }
 
 func (c Convention) Emit(ctx context.Context, detail config.EventDetail) error {
-	return c.Service.Event.Emit(ctx, c.Config.Registry.Id, "self-bus", detail.Action, detail)
+	if c.Config.Bus.Name == nil {
+		return fmt.Errorf("cannot emit event without bus name")
+	}
+	return c.Service.Event.Emit(ctx, c.Config.Registry.Id, *c.Config.Bus.Name, detail.Action, detail)
 }
 
 func (c Convention) Find(ctx context.Context, d deployment.Deployment, bus, rule string) (Subscription, error) {

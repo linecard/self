@@ -40,6 +40,10 @@ func (c *Config) FromAws(ctx context.Context, awsConfig aws.Config, stsc STSClie
 		return
 	}
 
+	if err = c.discoverBus(); err != nil {
+		return
+	}
+
 	return nil
 }
 
@@ -130,6 +134,13 @@ func (c *Config) discoverVpc() (err error) {
 		return fmt.Errorf("either both or none of AWS_SECURITY_GROUP_IDS and AWS_SUBNET_IDS must be set")
 	}
 
+	return nil
+}
+
+func (c *Config) discoverBus() (err error) {
+	if bus, exists := os.LookupEnv(EnvBusName); exists {
+		c.Bus.Name = &bus
+	}
 	return nil
 }
 
