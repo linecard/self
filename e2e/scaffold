@@ -48,8 +48,8 @@ deploy:
 [private]
 destroy:
     #! /usr/bin/env bash
-    set -e
     for scaffold in {{ scaffolds }}; do
+        echo "destroying $scaffold"
         self destroy init/testing-$scaffold
     done
 
@@ -57,7 +57,7 @@ destroy:
 [private]
 clean:
     #! /usr/bin/env bash
-    set -e
+    echo "cleaning up bin/ and init/"
     rm -rf init/*
     rm -rf bin/*
 
@@ -75,3 +75,6 @@ test:
 # Teardown
 teardown: destroy clean
 
+# Show deployments
+show:
+    self deployments
