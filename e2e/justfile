@@ -1,7 +1,3 @@
-#!/usr/bin/env -S just --justfile
-
-export SELF_API_GATEWAY_ID := "vas86x7yjc"
-export SELF_API_GATEWAY_AUTH_TYPE := "AWS_IAM"
 export PATH := x'$PWD/bin:${PATH}'
 scaffolds := "go node python ruby"
 

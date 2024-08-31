@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	shortRetry = 5
-	stdRetry   = 10
-	longRetry  = 15
+	shortRetry = 7
+	stdRetry   = 14
+	longRetry  = 21
 )
 
 func (s Service) List(ctx context.Context, prefix string) ([]lambda.GetFunctionOutput, error) {
@@ -95,7 +95,7 @@ func (s Service) PutFunction(ctx context.Context, put *lambda.CreateFunctionInpu
 		}
 
 		_, err = s.Client.Lambda.UpdateFunctionCode(ctx, patchCode, func(options *lambda.Options) {
-			options.Retryer = retry.AddWithMaxAttempts(options.Retryer, shortRetry)
+			options.Retryer = retry.AddWithMaxAttempts(options.Retryer, stdRetry)
 			options.Retryer = retry.AddWithErrorCodes(options.Retryer,
 				(*types.ResourceConflictException)(nil).ErrorCode(),
 			)

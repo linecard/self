@@ -143,12 +143,12 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 		PackageType:   types.PackageTypeImage,
 		Timeout:       &deploytime.Computed.Resources.Timeout,
 		MemorySize:    &deploytime.Computed.Resources.MemorySize,
-		VpcConfig: &types.VpcConfig{
-			SecurityGroupIds: c.Config.Vpc.SecurityGroupIds,
-			SubnetIds:        c.Config.Vpc.SubnetIds,
-		},
 		EphemeralStorage: &types.EphemeralStorage{
 			Size: &deploytime.Computed.Resources.EphemeralStorage,
+		},
+		VpcConfig: &types.VpcConfig{
+			SecurityGroupIds: []string{},
+			SubnetIds:        []string{},
 		},
 		Code: &types.FunctionCode{
 			ImageUri: aws.String(r.Uri),
@@ -157,7 +157,12 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	}
 
 	// Has VPC Config
-	if input.VpcConfig.SubnetIds != nil && input.VpcConfig.SecurityGroupIds != nil {
+	if c.Config.Vpc.SecurityGroupIds != nil && c.Config.Vpc.SubnetIds != nil {
+		input.VpcConfig = &types.VpcConfig{
+			SecurityGroupIds: c.Config.Vpc.SecurityGroupIds,
+			SubnetIds:        c.Config.Vpc.SubnetIds,
+		}
+
 		log.Info().Msg("VPC configuration detected, ensuring ENI garbage collection role")
 
 		eniRole, err := c.Service.Function.EnsureEniGcRole(ctx)
@@ -190,6 +195,7 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	if _, err = c.Service.Function.PutFunction(ctx, input, 5); err != nil {
 		return Deployment{}, err
 	}
+
 	return c.Find(ctx, deploytime.Computed.Resource.Name)
 }
 

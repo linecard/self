@@ -39,8 +39,8 @@ type Publish struct {
 }
 
 type Deploy struct {
-	Enable  bool `arg:"--enable,env:ENABLE_EVENTING_ON_DEPLOY" help:"enable event bus invocation"`
-	Disable bool `arg:"--disable,env:DISABLE_EVENTING_ON_DEPLOY" help:"disable event bus invocation"`
+	Enable  bool `arg:"--enable,env:SELF_ENABLE_ON_DEPLOY" help:"enable event bus invocation"`
+	Disable bool `arg:"--disable,env:SELF_DISABLE_ON_DEPLOY" help:"disable event bus invocation"`
 	FunctionArg
 }
 
