@@ -30,6 +30,7 @@ for scaffold in ruby python node go; do
     self destroy init/testing-$scaffold
 done
 ```
+approximates `just teardown`
 
 ## Ensure and Config State Mutations
 All just commands can be given one or many `-E config/<name>.env` files to permute state/tests.
