@@ -34,4 +34,4 @@ done
 ## Ensure and Config State Mutations
 All just commands can be given one or many `-E config/<name>.env` files to permute state/tests.
 
-For example, if we wanted to test the correct deployment state is achieved when `self` is instructed to deploy to an API gateway, we pass the `-E config/gateway.env` file to all `just` commands. If we want to mutate our current test deployments to a new state, we can do so mid-test-cycle via `just -E config/<desired>.env`.
+For example, if we wanted to test the correct deployment state is achieved when `self` is instructed to deploy to an API gateway, we pass the `-E config/gateway.env` file to all `just` commands. If we want to mutate our current test deployments to a new state, we can do so mid-test-cycle via `just -E config/<desired>.env ensure`.
