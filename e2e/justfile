@@ -1,5 +1,5 @@
 export PATH := x'$PWD/bin:${PATH}'
-scaffolds := "go node python ruby"
+scaffolds := "go node python ruby self"
 
 [private]
 @default:
@@ -35,6 +35,7 @@ publish:
 deploy:
     #! /usr/bin/env bash
     set -e
+    echo "deploying all scaffolds"
     for scaffold in {{ scaffolds }}; do
         echo "deploying $scaffold"
         self deploy init/testing-$scaffold
@@ -49,6 +50,7 @@ destroy:
         self destroy init/testing-$scaffold
     done
 
+
 # Clean up all scaffolds
 [private]
 clean:
@@ -59,6 +61,9 @@ clean:
 
 # Setup
 setup: build init publish deploy
+
+# Mutate
+ensure: deploy
 
 # Test
 test:
@@ -71,6 +76,6 @@ test:
 # Teardown
 teardown: destroy clean
 
-# Show deployments
+# Show test deployments
 show:
     self deployments

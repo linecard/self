@@ -33,7 +33,7 @@ type Publish struct {
 	Login            bool     `arg:"-l,--ecr-login" help:"Login to ECR"`
 	EnsureRepository bool     `arg:"--ensure-repository" help:"Ensure ECR repository exists"`
 	Force            bool     `arg:"-f,--force" help:"Override dirty commit protection"`
-	EmitDeploy       bool     `arg:"--emit-deploy" help:"Emit deploy event"`
+	EmitDeploy       bool     `arg:"--emit-deploy,env:SELF_EMIT_DEPLOY_ON_PUBLISH" help:"Emit deploy event"`
 	ExceptAccounts   []string `arg:"--except" help:"Exclude deployment to these accounts when emitting deploy event"`
 	Build
 }
@@ -74,5 +74,5 @@ type Inspect struct {
 
 type Untag struct {
 	FunctionArg
-	EmitDestroy bool `arg:"--emit-destroy" help:"Emit destroy event"`
+	EmitDestroy bool `arg:"--emit-destroy,env:SELF_EMIT_DESTROY_ON_UNTAG" help:"Emit destroy event"`
 }

@@ -16,6 +16,36 @@
             ],
             "Resource": "*"
         },
+        {{ if .ApiGateway.Id }}
+        {
+            "Sid": "AllowAPIGatewayAccess",
+            "Effect": "Allow",
+            "Action": [
+                "apigateway:POST",
+                "apigateway:DELETE",
+                "apigateway:PATCH"
+            ],
+            "Resource": [
+                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/routes",
+                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/routes/*",
+                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/integrations",
+                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/integrations/*"
+            ]
+        },
+        {{ end }}
+        {
+            "Sid": "AllowEventBridgeAccess",
+            "Effect": "Allow",
+            "Action": [
+                "events:DeleteRule",
+                "events:RemoveTargets",
+                "events:PutRule",
+                "events:PutTargets"
+            ],
+            "Resource": [
+                "arn:aws:events:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .AccountId {{"}}"}}:rule/{{ .Resource.Namespace }}-*"
+            ]
+        },
         {
             "Sid": "AllowIAMAccess",
             "Effect": "Allow",
@@ -23,8 +53,8 @@
                 "iam:*"
             ],
             "Resource": [
-                "arn:aws:iam::{{"{{"}} .Account.Id {{"}}"}}:policy/{{ .Resource.Namespace }}-*",
-                "arn:aws:iam::{{"{{"}} .Account.Id {{"}}"}}:role/{{ .Resource.Namespace }}-*"
+                "arn:aws:iam::{{"{{"}} .AccountId {{"}}"}}:policy/{{ .Resource.Namespace }}-*",
+                "arn:aws:iam::{{"{{"}} .AccountId {{"}}"}}:role/{{ .Resource.Namespace }}-*"
             ]
         },
         {
@@ -45,34 +75,6 @@
             ],
             "Resource": [
                 "arn:aws:ecr:{{"{{"}} .RegistryRegion {{"}}"}}:{{"{{"}} .RegistryAccountId {{"}}"}}:repository/{{ .Repository.Namespace }}/*"
-            ]
-        },
-        {
-            "Sid": "AllowEventBridgeAccess",
-            "Effect": "Allow",
-            "Action": [
-                "events:DeleteRule",
-                "events:RemoveTargets",
-                "events:PutRule",
-                "events:PutTargets"
-            ],
-            "Resource": [
-                "arn:aws:events:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .AccountId {{"}}"}}:rule/{{ .Resource.Namespace }}-*"
-            ]
-        },
-        {
-            "Sid": "AllowAPIGatewayAccess",
-            "Effect": "Allow",
-            "Action": [
-                "apigateway:POST",
-                "apigateway:DELETE",
-                "apigateway:PATCH"
-            ],
-            "Resource": [
-                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/routes",
-                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/routes/*",
-                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/integrations",
-                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/integrations/*"
             ]
         }
     ]
