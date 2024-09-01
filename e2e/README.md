@@ -24,7 +24,7 @@ done
 ```
 approximates `just test`
 
-## Teardown
+### Teardown
 ```bash
 for scaffold in ruby python node go; do
     self destroy init/testing-$scaffold
