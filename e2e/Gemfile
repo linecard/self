@@ -2,7 +2,7 @@
 
 source "https://rubygems.org"
 
-gem 'awspec', path: '../../awspec'
+gem 'awspec', git: 'https://github.com/bkeane/awspec'
 gem 'nokogiri'
 gem 'base64'
 gem 'rspec-retry'

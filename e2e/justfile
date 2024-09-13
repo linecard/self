@@ -1,46 +1,82 @@
-export AWS_API_GATEWAY_ID := "vas86x7yjc"
+export AWS_PROFILE := "linecard"
+export AWS_REGION := "us-west-2"
+export PATH := x'$PWD/bin:${PATH}'
+scaffolds := "go node python ruby"
 
 [private]
-default:
-    just --list
+@default:
+    just -f {{ justfile() }} --list
 
-init lang:
-    self init {{ lang }} init/testing-{{ lang }}
-    cp -r fixtures/bus init/testing-{{ lang }}/
+[private]
+build:
+    go build -o bin/self ../cmd/self/main.go
 
-publish lang:
-    self publish init/testing-{{ lang }} --ecr-login
-
-deploy lang:
-    self deploy init/testing-{{ lang }}
-
-test lang:
-    FUNCTION_PATH=init/testing-{{lang}} bundler exec -- rspec -f d
-
-destroy lang:
-    self destroy init/testing-{{ lang }}
-
-clean lang:
-    rm -rf init/testing-{{ lang }}
-
-up:
+# Initialize all scaffolds
+[private]
+init:
     #! /usr/bin/env bash
-    for lang in ruby python node go; do
-        just init $lang
-        just publish $lang
-        just deploy $lang
+    set -e
+    for scaffold in {{ scaffolds }}; do
+        echo "initializing $scaffold"
+        self init $scaffold init/testing-$scaffold
+        cp -r fixtures/bus init/testing-$scaffold/
     done
 
-smoke:
+# Publish all scaffolds
+[private]
+publish:
     #! /usr/bin/env bash
-    for lang in ruby python node go; do
-        just test $lang
+    set -e
+    for scaffold in {{ scaffolds }}; do
+        echo "publishing $scaffold"
+        self publish init/testing-$scaffold --ecr-login
     done
 
-down:
+# Deploy all scaffolds
+[private]
+deploy:
     #! /usr/bin/env bash
-    for lang in ruby python node go; do
-        just destroy $lang
-        just clean $lang
+    set -e
+    echo "deploying all scaffolds"
+    for scaffold in {{ scaffolds }}; do
+        echo "deploying $scaffold"
+        self deploy init/testing-$scaffold
     done
 
+# Destroy all scaffolds
+[private]
+destroy:
+    #! /usr/bin/env bash
+    for scaffold in {{ scaffolds }}; do
+        echo "destroying $scaffold"
+        self destroy init/testing-$scaffold
+    done
+
+# Clean up all scaffolds
+[private]
+clean:
+    #! /usr/bin/env bash
+    echo "cleaning up bin/ and init/"
+    rm -rf init/*
+    rm -rf bin/*
+
+# Setup all scaffolds
+setup: build init publish deploy
+
+# Test all scaffolds
+test:
+    #! /usr/bin/env bash
+    set -e
+    for scaffold in {{ scaffolds }}; do
+        FUNCTION_PATH=init/testing-$scaffold bundler exec -- rspec -f d
+    done
+
+# Ensure all scaffolds
+ensure: deploy
+
+# Teardown all scaffolds
+teardown: destroy clean
+
+# Show deployed scaffolds
+show:
+    self deployments

@@ -8,12 +8,13 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 // InitOtel initializes OpenTelemetry tracing and returns the context, tracer provider, and shutdown function.
-func InitOtel() (ctx context.Context, tp *sdktrace.TracerProvider, shutdown func()) {
-	ctx = context.Background()
+func InitOtel() (tp *sdktrace.TracerProvider, shutdown func()) {
+	ctx := context.Background()
 	tp = sdktrace.NewTracerProvider()
 	shutdown = func() {}
 
@@ -31,12 +32,14 @@ func InitOtel() (ctx context.Context, tp *sdktrace.TracerProvider, shutdown func
 			sdktrace.WithBatcher(exp))
 
 		shutdown = func() {
+			_ = tp.ForceFlush(ctx)
 			_ = exp.Shutdown(ctx)
 			_ = tp.Shutdown(ctx)
 		}
 	}
 
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 	otel.SetTracerProvider(tp)
 
-	return ctx, tp, shutdown
+	return tp, shutdown
 }

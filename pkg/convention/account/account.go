@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/linecard/self/pkg/convention/config"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type RegistryService interface {
@@ -35,6 +37,14 @@ func FromServices(c config.Config, b BuildService, r RegistryService) Convention
 }
 
 func (c Convention) LoginToEcr(ctx context.Context) error {
+	ctx, span := otel.Tracer("").Start(ctx, "ecr-login")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("registry-url", c.Config.Registry.Url),
+		attribute.String("registry-id", c.Config.Registry.Id),
+	)
+
 	token, err := c.Service.Registry.Token(ctx, c.Config.Registry.Id)
 	if err != nil {
 		return err

@@ -2,6 +2,7 @@ package event
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/smithy-go"
+	"github.com/rs/zerolog/log"
 )
 
 type EventBridgeClient interface {
@@ -22,6 +24,7 @@ type EventBridgeClient interface {
 	PutTargets(ctx context.Context, params *eventbridge.PutTargetsInput, optFns ...func(*eventbridge.Options)) (*eventbridge.PutTargetsOutput, error)
 	RemoveTargets(ctx context.Context, params *eventbridge.RemoveTargetsInput, optFns ...func(*eventbridge.Options)) (*eventbridge.RemoveTargetsOutput, error)
 	DeleteRule(ctx context.Context, params *eventbridge.DeleteRuleInput, optFns ...func(*eventbridge.Options)) (*eventbridge.DeleteRuleOutput, error)
+	PutEvents(ctx context.Context, params *eventbridge.PutEventsInput, optFns ...func(*eventbridge.Options)) (*eventbridge.PutEventsOutput, error)
 }
 
 type LambdaClient interface {
@@ -91,6 +94,40 @@ func (s Service) List(ctx context.Context) ([]JoinedRule, error) {
 	}
 
 	return results, nil
+}
+
+func (s Service) Emit(ctx context.Context, accountId, busName, detailType string, detail any) error {
+	detailBytes, err := json.Marshal(detail)
+	if err != nil {
+		return err
+	}
+
+	entries := []types.PutEventsRequestEntry{
+		{
+			Source:       aws.String(busName),
+			EventBusName: aws.String(busName),
+			Detail:       aws.String(string(detailBytes)),
+			DetailType:   aws.String(detailType),
+		},
+	}
+
+	ack, err := s.Client.EventBridge.PutEvents(ctx, &eventbridge.PutEventsInput{
+		Entries: entries,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	entyBytes, _ := json.Marshal(entries)
+	ackBytes, _ := json.Marshal(ack)
+
+	log.Info().
+		RawJSON("entries", entyBytes).
+		RawJSON("ack", ackBytes).
+		Msg("emitted event")
+
+	return err
 }
 
 func (s Service) Put(ctx context.Context, busName, ruleName, ruleContent, functionName, functionArn string) error {

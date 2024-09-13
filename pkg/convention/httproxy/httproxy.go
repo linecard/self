@@ -5,13 +5,12 @@ import (
 
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/deployment"
+	"go.opentelemetry.io/otel"
 
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2/types"
 	dockerTypes "github.com/docker/docker/api/types"
 	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
 )
 
 type GatewayService interface {
@@ -52,7 +51,7 @@ func FromServices(c config.Config, g GatewayService, r RegistryService) Conventi
 }
 
 func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error {
-	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Converge")
+	ctx, span := otel.Tracer("").Start(ctx, "httproxy.converge")
 	defer span.End()
 
 	if c.Config.ApiGateway.Id == nil {
@@ -62,13 +61,11 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error
 
 	release, err := d.FetchRelease(ctx, c.Service.Registry, c.Config.Registry.Id)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
-	buildtime, err := c.Config.Parse(release.Config.Labels)
+	buildtime, err := c.Config.DeployTime(release.Config.Labels)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
@@ -90,7 +87,7 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 		return err
 	}
 
-	deploytime, err := c.Config.Parse(release.Config.Labels)
+	deploytime, err := c.Config.DeployTime(release.Config.Labels)
 	if err != nil {
 		return err
 	}
@@ -132,9 +129,6 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 }
 
 func (c Convention) Unmount(ctx context.Context, d deployment.Deployment) error {
-	ctx, span := otel.Tracer("").Start(ctx, "httproxy.Unmount")
-	defer span.End()
-
 	apis, err := c.Service.Gateway.GetApis(ctx)
 	if err != nil {
 		return err

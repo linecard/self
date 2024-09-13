@@ -7,6 +7,8 @@ import (
 	"github.com/linecard/self/internal/util"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/release"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -14,8 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	dockerTypes "github.com/docker/docker/api/types"
 	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
 )
 
 type FunctionService interface {
@@ -63,12 +63,8 @@ func FromServices(c config.Config, f FunctionService, r RegistryService) Convent
 }
 
 func (c Convention) Find(ctx context.Context, deploymentName string) (Deployment, error) {
-	ctx, span := otel.Tracer("").Start(ctx, "deployment.Find")
-	defer span.End()
-
 	lambda, err := c.Service.Function.Inspect(ctx, deploymentName)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
@@ -90,16 +86,21 @@ func (c Convention) List(ctx context.Context, deploymentPrefix string) ([]Deploy
 }
 
 func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, error) {
-	var err error
-
-	ctx, span := otel.Tracer("").Start(ctx, "deployment.Deploy")
+	ctx, span := otel.Tracer("").Start(ctx, "deploy")
 	defer span.End()
 
-	deploytime, err := c.Config.Parse(r.Config.Labels)
+	var err error
+
+	deploytime, err := c.Config.DeployTime(r.Config.Labels)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
+
+	span.SetAttributes(
+		attribute.String("deployment-name", deploytime.Computed.Resource.Name),
+		attribute.String("deployment-role", deploytime.Computed.Resource.Role.Arn),
+		attribute.String("deployment-policy", deploytime.Computed.Resource.Policy.Arn),
+	)
 
 	role, err := c.Service.Function.PutRole(
 		ctx,
@@ -109,7 +110,6 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	)
 
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
@@ -121,7 +121,6 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	)
 
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
@@ -132,7 +131,6 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	)
 
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
 
@@ -145,12 +143,12 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 		PackageType:   types.PackageTypeImage,
 		Timeout:       &deploytime.Computed.Resources.Timeout,
 		MemorySize:    &deploytime.Computed.Resources.MemorySize,
-		VpcConfig: &types.VpcConfig{
-			SecurityGroupIds: c.Config.Vpc.SecurityGroupIds,
-			SubnetIds:        c.Config.Vpc.SubnetIds,
-		},
 		EphemeralStorage: &types.EphemeralStorage{
 			Size: &deploytime.Computed.Resources.EphemeralStorage,
+		},
+		VpcConfig: &types.VpcConfig{
+			SecurityGroupIds: []string{},
+			SubnetIds:        []string{},
 		},
 		Code: &types.FunctionCode{
 			ImageUri: aws.String(r.Uri),
@@ -159,12 +157,16 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 	}
 
 	// Has VPC Config
-	if input.VpcConfig.SubnetIds != nil && input.VpcConfig.SecurityGroupIds != nil {
+	if c.Config.Vpc.SecurityGroupIds != nil && c.Config.Vpc.SubnetIds != nil {
+		input.VpcConfig = &types.VpcConfig{
+			SecurityGroupIds: c.Config.Vpc.SecurityGroupIds,
+			SubnetIds:        c.Config.Vpc.SubnetIds,
+		}
+
 		log.Info().Msg("VPC configuration detected, ensuring ENI garbage collection role")
 
 		eniRole, err := c.Service.Function.EnsureEniGcRole(ctx)
 		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
 			return Deployment{}, err
 		}
 
@@ -173,7 +175,6 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 		// So all functions launched by self into vpcs use the AWSLambdaVPCAccessExecutionRole. It uses the managed policy of the same name.
 		input.Role = eniRole.Role.Arn
 		if _, err = c.Service.Function.PutFunction(ctx, input, 5); err != nil {
-			span.SetStatus(codes.Error, err.Error())
 			return Deployment{}, err
 		}
 
@@ -184,7 +185,6 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 		})
 
 		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
 			return Deployment{}, err
 		}
 
@@ -193,45 +193,37 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 
 	// Does not have VPC config
 	if _, err = c.Service.Function.PutFunction(ctx, input, 5); err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return Deployment{}, err
 	}
+
 	return c.Find(ctx, deploytime.Computed.Resource.Name)
 }
 
 func (c Convention) Destroy(ctx context.Context, d Deployment) error {
-	ctx, span := otel.Tracer("").Start(ctx, "deployment.Destroy")
-	defer span.End()
-
 	roleName := util.RoleNameFromArn(*d.Configuration.Role)
 
 	if roleName != "AWSLambdaVPCAccessExecutionRole" {
 		policies, err := c.Service.Function.GetRolePolicies(ctx, roleName)
 		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 
 		for _, policy := range policies.AttachedPolicies {
 			if _, err := c.Service.Function.DetachPolicyFromRole(ctx, *policy.PolicyArn, roleName); err != nil {
-				span.SetStatus(codes.Error, err.Error())
 				return err
 			}
 
 			if _, err := c.Service.Function.DeletePolicy(ctx, *policy.PolicyArn); err != nil {
-				span.SetStatus(codes.Error, err.Error())
 				return err
 			}
 		}
 
 		if _, err = c.Service.Function.DeleteRole(ctx, roleName); err != nil {
-			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 	}
 
 	if _, err := c.Service.Function.DeleteFunction(ctx, *d.Configuration.FunctionName); err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 

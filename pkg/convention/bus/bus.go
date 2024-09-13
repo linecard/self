@@ -9,11 +9,10 @@ import (
 	"github.com/linecard/self/pkg/convention/deployment"
 	"github.com/linecard/self/pkg/service/event"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	dockerTypes "github.com/docker/docker/api/types"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
 )
 
 type RegistryService interface {
@@ -24,6 +23,7 @@ type EventService interface {
 	List(ctx context.Context) ([]event.JoinedRule, error)
 	Put(ctx context.Context, bus, rule, expression, function, arn string) error
 	Delete(ctx context.Context, bus, rule, function, arn string) error
+	Emit(ctx context.Context, accountId, busName, detailType string, detail any) error
 }
 
 type Meta struct {
@@ -61,6 +61,13 @@ func FromServices(c config.Config, r RegistryService, e EventService) Convention
 	}
 }
 
+func (c Convention) Emit(ctx context.Context, detail config.EventDetail) error {
+	if c.Config.Bus.Name == nil {
+		return fmt.Errorf("cannot emit event without bus name")
+	}
+	return c.Service.Event.Emit(ctx, c.Config.Registry.Id, *c.Config.Bus.Name, detail.Action, detail)
+}
+
 func (c Convention) Find(ctx context.Context, d deployment.Deployment, bus, rule string) (Subscription, error) {
 	subscriptions, err := c.List(ctx, d)
 	if err != nil {
@@ -82,18 +89,13 @@ func (c Convention) List(ctx context.Context, d deployment.Deployment) ([]Subscr
 	var delete []Subscription
 	var noop []Subscription
 
-	ctx, span := otel.Tracer("").Start(ctx, "deployment.List")
-	defer span.End()
-
 	definitions, err := c.listDefined(ctx, d)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return []Subscription{}, err
 	}
 
 	active, err := c.listEnabled(ctx, d)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return []Subscription{}, err
 	}
 
@@ -105,7 +107,6 @@ func (c Convention) List(ctx context.Context, d deployment.Deployment) ([]Subscr
 		if c.containsRule(definitions, *activeRule.Rule.Name) {
 			expression, err := c.Config.Template(c.getExpression(definitions, *activeRule.Rule.Name))
 			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
 				return []Subscription{}, err
 			}
 
@@ -137,7 +138,6 @@ func (c Convention) List(ctx context.Context, d deployment.Deployment) ([]Subscr
 		if !c.containsRule(active, *definedRule.Rule.Name) {
 			expression, err := c.Config.Template(c.getExpression(definitions, *definedRule.Rule.Name))
 			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
 				return []Subscription{}, err
 			}
 
@@ -160,12 +160,8 @@ func (c Convention) List(ctx context.Context, d deployment.Deployment) ([]Subscr
 }
 
 func (c Convention) Disable(ctx context.Context, d deployment.Deployment, s Subscription) error {
-	ctx, span := otel.Tracer("").Start(ctx, "bus.Disable")
-	defer span.End()
-
 	err := c.Service.Event.Delete(ctx, *s.Bus.Name, *s.Rule.Name, *d.Configuration.FunctionName, *d.Configuration.FunctionArn)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
@@ -205,26 +201,23 @@ func (c Convention) DisableAll(ctx context.Context, d deployment.Deployment) err
 }
 
 func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error {
-	ctx, span := otel.Tracer("").Start(ctx, "bus.Converge")
+	ctx, span := otel.Tracer("").Start(ctx, "bus.converge")
 	defer span.End()
 
 	subscriptions, err := c.List(ctx, d)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
 	for _, subscription := range subscriptions {
 		if subscription.Meta.Destroy {
 			if err := c.Disable(ctx, d, subscription); err != nil {
-				span.SetStatus(codes.Error, err.Error())
 				return err
 			}
 		}
 
 		if subscription.Meta.Update {
 			if err := c.Enable(ctx, d, subscription); err != nil {
-				span.SetStatus(codes.Error, err.Error())
 				return err
 			}
 		}
@@ -240,7 +233,7 @@ func (c Convention) listDefined(ctx context.Context, d deployment.Deployment) ([
 		return []Subscription{}, err
 	}
 
-	deploytime, err := c.Config.Parse(release.Config.Labels)
+	deploytime, err := c.Config.DeployTime(release.Config.Labels)
 	if err != nil {
 		return []Subscription{}, err
 	}

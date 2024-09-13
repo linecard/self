@@ -58,7 +58,7 @@ describe name do
     role_arn = "arn:aws:iam::#{caller.account}:role/#{resource_name}"
     policy_name = resource_name
     route_key = "ANY /#{repo}/#{branch}/#{name}/{proxy+}"
-    url = "https://#{ENV["AWS_API_GATEWAY_ID"]}.execute-api.#{region}.amazonaws.com/#{repo}/#{branch}/#{name}/"
+    url = "https://#{ENV["SELF_API_GATEWAY_ID"]}.execute-api.#{region}.amazonaws.com/#{repo}/#{branch}/#{name}/"
 
     describe lambda(function_name) do
       it { should exist }
@@ -91,7 +91,7 @@ describe name do
         it { should have_tag('Origin').value(origin) }
     end
 
-    if ENV.key?("AWS_API_GATEWAY_ID")
+    if ENV.key?("SELF_API_GATEWAY_ID")
       describe apigatewayv2('self-verify') do
         it { should exist }
         it { should have_route_key(route_key).with_target(function_arn) }
@@ -110,14 +110,14 @@ describe name do
       end
     end
 
-    if !ENV.key?("AWS_API_GATEWAY_ID")
+    if !ENV.key?("SELF_API_GATEWAY_ID")
       describe apigatewayv2('self-verify') do
         it { should exist }
         it { should_not have_target(function_arn) }
       end
     end
 
-    if ENV.key?("ENABLE_EVENTING_ON_DEPLOY")
+    if ENV.key?("SELF_ENABLE_ON_DEPLOY")
       buses(path) do |bus, rule|
         describe eventbridge(bus) do
           it { should exist }
@@ -126,11 +126,33 @@ describe name do
       end
     end
 
-    if !ENV.key?("ENABLE_EVENTING_ON_DEPLOY")
+    if ENV.key?("SELF_DISABLE_ON_DEPLOY")
       buses(path) do |bus, rule|
         describe eventbridge(bus) do
           it { should exist }
           it { should_not have_rule("#{resource_name}-#{rule}") }
+        end
+      end
+    end
+
+    if ENV.key?("SELF_SUBNET_IDS") && ENV.key?("SELF_SECURITY_GROUP_IDS")
+      describe lambda(function_name) do
+        its(:vpc_config) do
+          expect(subject.vpc_config.subnet_ids).to eq ENV["SELF_SUBNET_IDS"].split(",")
+        end
+
+        its(:vpc_config) do
+          expect(subject.vpc_config.security_group_ids).to eq ENV["SELF_SECURITY_GROUP_IDS"].split(",")
+        end
+      end
+    else
+      describe lambda(function_name) do
+        its(:vpc_config) do
+          expect(subject.vpc_config.subnet_ids).to be_empty
+        end
+
+        its(:vpc_config) do
+          expect(subject.vpc_config.security_group_ids).to be_empty
         end
       end
     end

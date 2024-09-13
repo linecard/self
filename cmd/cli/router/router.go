@@ -21,48 +21,54 @@ type Root struct {
 	Releases    *param.Releases    `arg:"subcommand:releases" help:"List releases"`
 	Deployments *param.Deployments `arg:"subcommand:deployments" help:"List release deployments"`
 	Inspect     *param.Inspect     `arg:"subcommand:inspect" help:"Inspect config"`
+	Untag       *param.Untag       `arg:"subcommand:untag" help:"Untag a release"`
 }
 
-func (c Root) Route(ctx context.Context, api sdk.API) {
+func (c Root) Route(ctx context.Context, api sdk.API) error {
 	switch {
 	case c.Init != nil:
-		method.InitFunction(ctx, api, c.Init)
+		return method.InitFunction(ctx, api, c.Init)
 
 	case c.Build != nil:
-		method.BuildRelease(ctx, api, c.Build)
+		return method.BuildRelease(ctx, api, c.Build)
 
 	case c.Publish != nil:
-		method.PublishRelease(ctx, api, c.Publish)
+		return method.PublishRelease(ctx, api, c.Publish)
 
 	case c.Releases != nil:
-		method.ListReleases(ctx, api, c.Releases)
+		return method.ListReleases(ctx, api, c.Releases)
 
 	case c.Deploy != nil:
-		method.DeployRelease(ctx, api, c.Deploy)
+		return method.DeployRelease(ctx, api, c.Deploy)
 
 	case c.Deployments != nil:
-		method.ListDeployments(ctx, api, c.Deployments)
+		return method.ListDeployments(ctx, api, c.Deployments)
 
 	case c.Destroy != nil:
-		method.DestroyDeployment(ctx, api, c.Destroy)
+		return method.DestroyDeployment(ctx, api, c.Destroy)
+
+	case c.Untag != nil:
+		return method.UntagRelease(ctx, api, c.Untag)
 
 	case c.Inspect != nil:
 		switch {
 		case c.Inspect.Build != nil:
-			method.PrintBuildTime(ctx, api, c.Inspect.Build)
+			return method.PrintBuildTime(ctx, api, c.Inspect.Build)
 
 		case c.Inspect.Deploy != nil:
-			method.PrintDeployTime(ctx, api, c.Inspect.Deploy)
+			return method.PrintDeployTime(ctx, api, c.Inspect.Deploy)
 
 		case c.Inspect.Global != nil:
-			method.PrintGlobalConfig(ctx, api)
+			return method.PrintGlobalConfig(ctx, api)
 
 		default:
 			arg.MustParse(&c).WriteHelpForSubcommand(os.Stdout, "inspect")
+			return nil
 		}
 
 	default:
 		arg.MustParse(&c).WriteHelp(os.Stdout)
+		return nil
 
 	}
 }
