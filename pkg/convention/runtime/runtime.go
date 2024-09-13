@@ -8,10 +8,10 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/linecard/self/pkg/convention/config"
 	"github.com/linecard/self/pkg/convention/release"
 	"github.com/linecard/self/pkg/service/docker"
+	"github.com/rs/zerolog/log"
 )
 
 type RuntimeService interface {
@@ -36,7 +36,7 @@ func FromServices(c config.Config, r RuntimeService) Convention {
 	}
 }
 
-func (c Convention) Emulate(ctx context.Context, i release.Image, s *types.Credentials) error {
+func (c Convention) Emulate(ctx context.Context, i release.Image) error {
 	command := append(i.Config.Entrypoint, i.Config.Cmd...)
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -48,9 +48,14 @@ func (c Convention) Emulate(ctx context.Context, i release.Image, s *types.Crede
 		return err
 	}
 
-	deploytime, err := c.Config.Parse(i.Config.Labels)
+	deploytime, err := c.Config.DeployTime(i.Config.Labels)
 	if err != nil {
 		return err
+	}
+
+	creds, err := c.Config.AssumeRoleWithPolicy(ctx, deploytime.Policy.Decoded)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to assume role with policy")
 	}
 
 	deployInput := docker.DeployInput{
@@ -59,9 +64,9 @@ func (c Convention) Emulate(ctx context.Context, i release.Image, s *types.Crede
 		ImageUri:        i.RepoTags[0],
 		Function:        deploytime.Computed.Resource.Name,
 		Command:         command,
-		AccessKeyId:     *s.AccessKeyId,
-		SecretAccessKey: *s.SecretAccessKey,
-		SessionToken:    *s.SessionToken,
+		AccessKeyId:     *creds.AccessKeyId,
+		SecretAccessKey: *creds.SecretAccessKey,
+		SessionToken:    *creds.SessionToken,
 	}
 
 	if err := c.Service.Runtime.Deploy(ctx, deployInput); err != nil {

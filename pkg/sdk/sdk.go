@@ -6,6 +6,15 @@ import (
 	// config
 	"github.com/linecard/self/pkg/convention/config"
 
+	// clients
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
+	"github.com/aws/aws-sdk-go-v2/service/ecr"
+	"github.com/aws/aws-sdk-go-v2/service/eventbridge"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+
 	// services
 	"github.com/linecard/self/pkg/service/docker"
 	"github.com/linecard/self/pkg/service/event"
@@ -20,15 +29,6 @@ import (
 	"github.com/linecard/self/pkg/convention/httproxy"
 	"github.com/linecard/self/pkg/convention/release"
 	"github.com/linecard/self/pkg/convention/runtime"
-
-	// clients
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
-	"github.com/aws/aws-sdk-go-v2/service/ecr"
-	"github.com/aws/aws-sdk-go-v2/service/eventbridge"
-	"github.com/aws/aws-sdk-go-v2/service/iam"
-	"github.com/aws/aws-sdk-go-v2/service/lambda"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
 type Clients struct {
@@ -56,6 +56,7 @@ type Conventions struct {
 	Deployment   deployment.Convention
 	Subscription bus.Convention
 	Httproxy     httproxy.Convention
+	Bus          bus.Convention
 }
 
 type API struct {
@@ -93,6 +94,7 @@ func InitConventions(ctx context.Context, config config.Config, services Service
 		Deployment:   deployment.FromServices(config, services.Function, services.Registry),
 		Subscription: bus.FromServices(config, services.Registry, services.Event),
 		Httproxy:     httproxy.FromServices(config, services.Gateway, services.Registry),
+		Bus:          bus.FromServices(config, services.Registry, services.Event),
 	}, nil
 }
 

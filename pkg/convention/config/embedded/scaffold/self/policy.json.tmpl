@@ -16,37 +16,23 @@
             ],
             "Resource": "*"
         },
+        {{ if .ApiGateway.Id }}
         {
-            "Sid": "AllowIAMAccess",
+            "Sid": "AllowAPIGatewayAccess",
             "Effect": "Allow",
             "Action": [
-                "iam:*"
+                "apigateway:POST",
+                "apigateway:DELETE",
+                "apigateway:PATCH"
             ],
             "Resource": [
-                "arn:aws:iam::{{"{{"}} .AccountId {{"}}"}}:policy/{{ .Resource.Prefix }}-*",
-                "arn:aws:iam::{{"{{"}} .AccountId {{"}}"}}:role/{{ .Resource.Prefix }}-*"
+                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/routes",
+                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/routes/*",
+                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/integrations",
+                "arn:aws:apigateway:*::/apis/{{"{{"}} .ApiGatewayId {{"}}"}}/integrations/*"
             ]
         },
-        {
-            "Sid": "AllowLambdaAccess",
-            "Effect": "Allow",
-            "Action": [
-                "lambda:*"
-            ],
-            "Resource": [
-                "arn:aws:lambda:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .AccountId {{"}}"}}:function:{{ .Resource.Prefix }}-*"
-            ]
-        },
-        {
-            "Sid": "AllowECRRegistryAccess",
-            "Effect": "Allow",
-            "Action": [
-                "ecr:*"
-            ],
-            "Resource": [
-                "arn:aws:ecr:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .RegistryAccountId {{"}}"}}:repository/{{ .Repository.Prefix }}/*"
-            ]
-        },
+        {{ end }}
         {
             "Sid": "AllowEventBridgeAccess",
             "Effect": "Allow",
@@ -57,24 +43,38 @@
                 "events:PutTargets"
             ],
             "Resource": [
-                "arn:aws:events:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .AccountId {{"}}"}}:rule/{{ .Resource.Prefix }}-*"
+                "arn:aws:events:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .AccountId {{"}}"}}:rule/{{ .Resource.Namespace }}-*"
             ]
         },
         {
-            "Sid": "AllowAPIGatewayAccess",
+            "Sid": "AllowIAMAccess",
             "Effect": "Allow",
             "Action": [
-                "apigateway:GET",
-                "apigateway:POST",
-                "apigateway:DELETE",
-                "apigateway:PATCH"
+                "iam:*"
             ],
             "Resource": [
-                "arn:aws:apigateway:*::/apis",
-                "arn:aws:apigateway:*::/apis/*/routes",
-                "arn:aws:apigateway:*::/apis/*/routes/*",
-                "arn:aws:apigateway:*::/apis/*/integrations",
-                "arn:aws:apigateway:*::/apis/*/integrations/*"
+                "arn:aws:iam::{{"{{"}} .AccountId {{"}}"}}:policy/{{ .Resource.Namespace }}-*",
+                "arn:aws:iam::{{"{{"}} .AccountId {{"}}"}}:role/{{ .Resource.Namespace }}-*"
+            ]
+        },
+        {
+            "Sid": "AllowLambdaAccess",
+            "Effect": "Allow",
+            "Action": [
+                "lambda:*"
+            ],
+            "Resource": [
+                "arn:aws:lambda:{{"{{"}} .Region {{"}}"}}:{{"{{"}} .AccountId {{"}}"}}:function:{{ .Resource.Namespace }}-*"
+            ]
+        },
+        {
+            "Sid": "AllowECRRegistryAccess",
+            "Effect": "Allow",
+            "Action": [
+                "ecr:*"
+            ],
+            "Resource": [
+                "arn:aws:ecr:{{"{{"}} .RegistryRegion {{"}}"}}:{{"{{"}} .RegistryAccountId {{"}}"}}:repository/{{ .Repository.Namespace }}/*"
             ]
         }
     ]
