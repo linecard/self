@@ -1,7 +1,7 @@
 export AWS_PROFILE := "linecard"
 export AWS_REGION := "us-west-2"
 export PATH := x'$PWD/bin:${PATH}'
-scaffolds := "go node python ruby self"
+scaffolds := "go node python ruby"
 
 [private]
 @default:
@@ -60,13 +60,10 @@ clean:
     rm -rf init/*
     rm -rf bin/*
 
-# Setup
+# Setup all scaffolds
 setup: build init publish deploy
 
-# Mutate
-ensure: deploy
-
-# Test
+# Test all scaffolds
 test:
     #! /usr/bin/env bash
     set -e
@@ -74,9 +71,12 @@ test:
         FUNCTION_PATH=init/testing-$scaffold bundler exec -- rspec -f d
     done
 
-# Teardown
+# Ensure all scaffolds
+ensure: deploy
+
+# Teardown all scaffolds
 teardown: destroy clean
 
-# Show test deployments
+# Show deployed scaffolds
 show:
     self deployments
