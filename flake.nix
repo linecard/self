@@ -31,7 +31,7 @@
             go-tools
             gotools
             gopls
-            ruby
+            ruby_3_3
             bundler
           ];
 

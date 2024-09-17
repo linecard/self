@@ -264,7 +264,7 @@ func ListDeployments(ctx context.Context, api sdk.API, p *param.Deployments) err
 		return err
 	}
 
-	t.Headers("Deployment", "HEAD", "SHA", "DIGEST", "ENABLED", "ROUTE", "DEPLOYED")
+	t.Headers("DEPLOYMENT", "HEAD", "SHA", "DIGEST", "ENABLED", "ROUTE", "DEPLOYED")
 
 	wg.Add(len(deployments))
 

@@ -1,16 +1,18 @@
 package param
 
 type GlobalOpts struct {
-	Branch               string `arg:"--branch,env:SELF_BRANCH_OVERRIDE"`
-	Sha                  string `arg:"--sha,env:SELF_SHA_OVERRIDE"`
-	EcrId                string `arg:"--ecr-id,env:SELF_ECR_REGISTRY_ID"`
-	EcrRegion            string `arg:"--ecr-region,env:SELF_ECR_REGISTRY_REGION"`
-	ApiGatewayId         string `arg:"--api-gateway-id,env:SELF_API_GATEWAY_ID"`
-	SelfBusName          string `arg:"--bus-name,env:SELF_SELF_BUS_NAME"`
-	SubnetIds            string `arg:"--subnet-ids,env:SELF_SUBNET_IDS"`
-	SecurityGroupIds     string `arg:"--security-group-ids,env:SELF_SECURITY_GROUP_IDS"`
-	OwnerPrefixResources bool   `arg:"--prefix-resources-with-owner,env:SELF_PREFIX_RESOURCES_WITH_OWNER"`
-	OwnerPrefixRoutes    bool   `arg:"--prefix-routes-with-owner,env:SELF_PREFIX_ROUTE_KEY_WITH_OWNER"`
+	Branch                 string `arg:"--branch,env:SELF_BRANCH_OVERRIDE"`
+	Sha                    string `arg:"--sha,env:SELF_SHA_OVERRIDE"`
+	EcrId                  string `arg:"--ecr-id,env:SELF_ECR_REGISTRY_ID"`
+	EcrRegion              string `arg:"--ecr-region,env:SELF_ECR_REGISTRY_REGION"`
+	ApiGatewayId           string `arg:"--api-gateway-id,env:SELF_API_GATEWAY_ID"`
+	ApiGatewayAuthType     string `arg:"--api-gateway-auth-type,env:SELF_API_GATEWAY_AUTH_TYPE"`
+	ApiGatewayAuthorizerId string `arg:"--api-gateway-authorizer-id,env:SELF_API_GATEWAY_AUTHORIZER_ID"`
+	SelfBusName            string `arg:"--bus-name,env:SELF_SELF_BUS_NAME"`
+	SubnetIds              string `arg:"--subnet-ids,env:SELF_SUBNET_IDS"`
+	SecurityGroupIds       string `arg:"--security-group-ids,env:SELF_SECURITY_GROUP_IDS"`
+	OwnerPrefixResources   bool   `arg:"--prefix-resources-with-owner,env:SELF_PREFIX_RESOURCES_WITH_OWNER"`
+	OwnerPrefixRoutes      bool   `arg:"--prefix-routes-with-owner,env:SELF_PREFIX_ROUTE_KEY_WITH_OWNER"`
 }
 
 type FunctionArg struct {
