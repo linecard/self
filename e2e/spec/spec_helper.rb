@@ -20,3 +20,61 @@ RSpec.configure do |config|
     config.default_formatter = "doc"
   end
 end
+
+def buses(path)
+  paths = Dir.glob("#{path}/**/*")
+  paths.each do |file_path|
+    if match = file_path.match(%r{bus/([^/]+)/([^/]+)})
+      bus = match[1]
+      rule = match[2].split(".")[0]
+      yield(bus, rule) if block_given?
+    end
+  end
+end
+
+def sigv4_get_request(url)
+  uri = URI(url)
+
+  signer = Aws::Sigv4::Signer.new(
+    service: 'execute-api',
+    region: 'us-west-2',
+    credentials_provider: Aws::SharedCredentials.new
+  )
+
+  request = Net::HTTP::Get.new(uri)
+  signed_request = signer.sign_request(http_method: 'GET', url: uri.to_s)
+
+  signed_request.headers.each { |key, value| request[key] = value }
+
+  Net::HTTP.start(uri.host, uri.port, use_ssl: true) do |http|
+    http.request(request)
+  end
+end
+
+def bearer_get_request(url)
+  ssmc = Aws::SSM::Client.new
+  creds = ssmc.get_parameter({
+    name: "/linecard/auth0/client",
+    with_decryption: true
+  })
+
+
+  auth0_uri = URI("https://linecard.us.auth0.com/oauth/token")
+  http = Net::HTTP.new(auth0_uri.host, auth0_uri.port)
+  http.use_ssl = true
+  http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+
+  request = Net::HTTP::Post.new(auth0_uri)
+  request["content-type"] = 'application/json'
+  request.body = creds.parameter.value
+
+  response = http.request(request)
+  token = JSON.parse(response.read_body)["access_token"]
+
+  uri = URI(url)
+  request = Net::HTTP::Get.new(uri)
+  request["Authorization"] = "Bearer #{token}"
+  Net::HTTP.start(uri.host, uri.port, use_ssl: true) do |http|
+    http.request(request)
+  end
+end

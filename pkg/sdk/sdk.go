@@ -32,6 +32,7 @@ import (
 )
 
 type Clients struct {
+	AwsConfig          aws.Config
 	StsClient          *sts.Client
 	EcrClient          *ecr.Client
 	LambdaClient       *lambda.Client
@@ -114,6 +115,7 @@ func InitServices(ctx context.Context, clients Clients) (Services, error) {
 
 func InitClients(ctx context.Context, awsConfig aws.Config) (Clients, error) {
 	return Clients{
+		AwsConfig:          awsConfig,
 		StsClient:          sts.NewFromConfig(awsConfig),
 		EcrClient:          ecr.NewFromConfig(awsConfig),
 		LambdaClient:       lambda.NewFromConfig(awsConfig),

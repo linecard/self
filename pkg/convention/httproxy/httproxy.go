@@ -17,7 +17,7 @@ type GatewayService interface {
 	GetApi(ctx context.Context, apiId string) (*apigatewayv2.GetApiOutput, error)
 	GetApis(ctx context.Context) (*apigatewayv2.GetApisOutput, error)
 	PutIntegration(ctx context.Context, apiId, lambdaArn, routeKey string) (*apigatewayv2.GetIntegrationOutput, error)
-	PutRoute(ctx context.Context, apiId, integrationId, routeKey string, awsAuth bool) (*apigatewayv2.GetRouteOutput, error)
+	PutRoute(ctx context.Context, apiId, integrationId, routeKey string, authType string, authorizerId *string) (*apigatewayv2.GetRouteOutput, error)
 	PutLambdaPermission(ctx context.Context, apiId, lambdaArn, routeKey string) error
 	DeleteIntegration(ctx context.Context, apiId string, route types.Route) error
 	DeleteRoute(ctx context.Context, apiId string, route types.Route) error
@@ -64,12 +64,12 @@ func (c Convention) Converge(ctx context.Context, d deployment.Deployment) error
 		return err
 	}
 
-	buildtime, err := c.Config.DeployTime(release.Config.Labels)
+	deploytime, err := c.Config.DeployTime(release.Config.Labels)
 	if err != nil {
 		return err
 	}
 
-	if !buildtime.Computed.Resources.Http {
+	if !deploytime.Computed.Resources.Http {
 		return c.Unmount(ctx, d)
 	}
 
@@ -107,7 +107,8 @@ func (c Convention) Mount(ctx context.Context, d deployment.Deployment) error {
 		*c.Config.ApiGateway.Id,
 		*integration.IntegrationId,
 		deploytime.Computed.Resources.RouteKey,
-		!deploytime.Computed.Resources.Public, // TODO: switch to better auth config
+		deploytime.Computed.Resources.AuthType,
+		deploytime.Computed.Resources.AuthorizerId,
 	)
 
 	if err != nil {

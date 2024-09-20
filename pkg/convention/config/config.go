@@ -22,6 +22,8 @@ const (
 	EnvEcrId                = "SELF_ECR_REGISTRY_ID"
 	EnvEcrRegion            = "SELF_ECR_REGISTRY_REGION"
 	EnvGwId                 = "SELF_API_GATEWAY_ID"
+	EnvAuthType             = "SELF_API_GATEWAY_AUTH_TYPE"
+	EnvAuthorizerId         = "SELF_API_GATEWAY_AUTHORIZER_ID"
 	EnvSgIds                = "SELF_SECURITY_GROUP_IDS"
 	EnvSnIds                = "SELF_SUBNET_IDS"
 	EnvBusName              = "SELF_SELF_BUS_NAME"
@@ -100,6 +102,7 @@ type Config struct {
 	Vpc          Vpc
 	TemplateData TemplateData
 	Version      string
+	AwsConfig    aws.Config `json:"-"`
 }
 
 // Initialize configuration from AWS and local filesystem.

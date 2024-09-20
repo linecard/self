@@ -1,7 +1,8 @@
 export AWS_PROFILE := "linecard"
 export AWS_REGION := "us-west-2"
 export PATH := x'$PWD/bin:${PATH}'
-scaffolds := "go node python ruby"
+# scaffolds := "go node python ruby"
+scaffolds := "go"
 
 [private]
 @default:
@@ -37,11 +38,11 @@ publish:
 deploy:
     #! /usr/bin/env bash
     set -e
-    echo "deploying all scaffolds"
     for scaffold in {{ scaffolds }}; do
         echo "deploying $scaffold"
         self deploy init/testing-$scaffold
     done
+    rm -rf bin/*
 
 # Destroy all scaffolds
 [private]

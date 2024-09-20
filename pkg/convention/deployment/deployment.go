@@ -172,7 +172,8 @@ func (c Convention) Deploy(ctx context.Context, r release.Release) (Deployment, 
 
 		// The function must be created with a seperate (and persistent) role, as this role is used during garbage collection by ec2.
 		// If you just launch with the desired role, that role will be deleted on destroy before garbage collection can clear the eni.
-		// So all functions launched by self into vpcs use the AWSLambdaVPCAccessExecutionRole. It uses the managed policy of the same name.
+		// So all functions launched by self into vpcs use the singleton AWSLambdaVPCAccessExecutionRole.
+		// It uses the managed policy of the same name.
 		input.Role = eniRole.Role.Arn
 		if _, err = c.Service.Function.PutFunction(ctx, input, 5); err != nil {
 			return Deployment{}, err

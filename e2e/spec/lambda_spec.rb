@@ -2,40 +2,6 @@ require 'spec_helper'
 
 raise "must provide FUNCTION_PATH in env" unless ENV.key?("FUNCTION_PATH")
 
-def buses(path)
-  paths = Dir.glob("#{path}/**/*")
-  paths.each do |file_path|
-    if match = file_path.match(%r{bus/([^/]+)/([^/]+)})
-      bus = match[1]
-      rule = match[2].split(".")[0]
-      yield(bus, rule) if block_given?
-    end
-  end
-end
-
-def sigv4_get_request(url)
-  uri = URI(url)
-
-  # Use default credential provider chain
-  signer = Aws::Sigv4::Signer.new(
-    service: 'execute-api',
-    region: 'us-west-2',
-    credentials_provider: Aws::SharedCredentials.new
-  )
-
-  # Create and sign the HTTP GET request
-  request = Net::HTTP::Get.new(uri)
-  signed_request = signer.sign_request(http_method: 'GET', url: uri.to_s)
-
-  # Add signed headers to the request
-  signed_request.headers.each { |key, value| request[key] = value }
-
-  # Perform the HTTP request
-  Net::HTTP.start(uri.host, uri.port, use_ssl: true) do |http|
-    http.request(request)
-  end
-end
-
 path = ENV["FUNCTION_PATH"]
 name = File.basename(path)
 
@@ -97,15 +63,31 @@ describe name do
         it { should have_route_key(route_key).with_target(function_arn) }
       end
 
-      describe "GET #{url}" do
-        it "authenticated: return 200", retry: 10 do
-          response = sigv4_get_request(url)
-          expect(response.code).to eq("200")
-        end
+      if ENV.key?("SELF_API_GATEWAY_AUTH_TYPE") && ENV["SELF_API_GATEWAY_AUTH_TYPE"] == "AWS_IAM"
+        describe "GET #{url}" do
+          it "authenticated: return 200", retry: 10 do
+            response = sigv4_get_request(url)
+            expect(response.code).to eq("200")
+          end
 
-        it "unauthenticated: return 403", retry: 10 do
-          response = Net::HTTP.get_response(URI(url))
-          expect(response.code).to eq("403")
+          it "unauthenticated: return 403", retry: 10 do
+            response = Net::HTTP.get_response(URI(url))
+            expect(response.code).to eq("403")
+          end
+        end
+      end
+
+      if ENV.key?("SELF_API_GATEWAY_AUTH_TYPE") && ENV["SELF_API_GATEWAY_AUTH_TYPE"] == "JWT"
+        describe "GET #{url}" do
+          it "authenticated: return 200", retry: 10 do
+            response = bearer_get_request(url)
+            expect(response.code).to eq("200")
+          end
+
+          it "unauthenticated: return 401", retry: 10 do
+            response = Net::HTTP.get_response(URI(url))
+            expect(response.code).to eq("401")
+          end
         end
       end
     end
