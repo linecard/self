@@ -63,15 +63,31 @@ describe name do
         it { should have_route_key(route_key).with_target(function_arn) }
       end
 
-      describe "GET #{url}" do
-        it "authenticated: return 200", retry: 10 do
-          response = sigv4_get_request(url)
-          expect(response.code).to eq("200")
-        end
+      if ENV.key?("SELF_API_GATEWAY_AUTH_TYPE") && ENV["SELF_API_GATEWAY_AUTH_TYPE"] == "AWS_IAM"
+        describe "GET #{url}" do
+          it "authenticated: return 200", retry: 10 do
+            response = sigv4_get_request(url)
+            expect(response.code).to eq("200")
+          end
 
-        it "unauthenticated: return 403", retry: 10 do
-          response = Net::HTTP.get_response(URI(url))
-          expect(response.code).to eq("403")
+          it "unauthenticated: return 403", retry: 10 do
+            response = Net::HTTP.get_response(URI(url))
+            expect(response.code).to eq("403")
+          end
+        end
+      end
+
+      if ENV.key?("SELF_API_GATEWAY_AUTH_TYPE") && ENV["SELF_API_GATEWAY_AUTH_TYPE"] == "JWT"
+        describe "GET #{url}" do
+          it "authenticated: return 200", retry: 10 do
+            response = bearer_get_request(url)
+            expect(response.code).to eq("200")
+          end
+
+          it "unauthenticated: return 401", retry: 10 do
+            response = Net::HTTP.get_response(URI(url))
+            expect(response.code).to eq("401")
+          end
         end
       end
     end

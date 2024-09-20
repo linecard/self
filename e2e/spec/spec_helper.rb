@@ -51,7 +51,7 @@ def sigv4_get_request(url)
   end
 end
 
-def bearer_get_request(uri)
+def bearer_get_request(url)
   ssmc = Aws::SSM::Client.new
   creds = ssmc.get_parameter({
     name: "/linecard/auth0/client",
@@ -60,20 +60,20 @@ def bearer_get_request(uri)
 
 
   auth0_uri = URI("https://linecard.us.auth0.com/oauth/token")
-  http = Net::HTTP.new(url.host, url.port)
+  http = Net::HTTP.new(auth0_uri.host, auth0_uri.port)
   http.use_ssl = true
   http.verify_mode = OpenSSL::SSL::VERIFY_NONE
 
-  request = Net::HTTP::Post.new(url)
+  request = Net::HTTP::Post.new(auth0_uri)
   request["content-type"] = 'application/json'
   request.body = creds.parameter.value
 
   response = http.request(request)
   token = JSON.parse(response.read_body)["access_token"]
 
-  uri = URI(uri)
+  uri = URI(url)
   request = Net::HTTP::Get.new(uri)
-  request.headers["Authorization"] = "Bearer #{token}"
+  request["Authorization"] = "Bearer #{token}"
   Net::HTTP.start(uri.host, uri.port, use_ssl: true) do |http|
     http.request(request)
   end
