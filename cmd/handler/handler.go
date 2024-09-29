@@ -84,7 +84,7 @@ func Handler(ctx context.Context, event config.Event) (err error) {
 
 	for _, account := range event.Detail.ExceptAccounts {
 		if account == cfg.Account.Id {
-			span.SetStatus(codes.Code(codes.Ok), "skipping deployment to account as instructed by event")
+			span.SetStatus(codes.Code(codes.Ok), "skipping account as instructed by event")
 			return nil
 		}
 	}

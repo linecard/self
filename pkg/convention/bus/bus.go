@@ -10,6 +10,7 @@ import (
 	"github.com/linecard/self/pkg/service/event"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	dockerTypes "github.com/docker/docker/api/types"
@@ -61,11 +62,18 @@ func FromServices(c config.Config, r RegistryService, e EventService) Convention
 	}
 }
 
-func (c Convention) Emit(ctx context.Context, detail config.EventDetail) error {
+func (c Convention) Emit(ctx context.Context, detailType string, detail config.EventDetail) error {
 	if c.Config.Bus.Name == nil {
 		return fmt.Errorf("cannot emit event without bus name")
 	}
-	return c.Service.Event.Emit(ctx, c.Config.Registry.Id, *c.Config.Bus.Name, detail.Action, detail)
+
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+
+	detail.Traceparent = carrier["traceparent"]
+	detail.Tracestate = carrier["tracestate"]
+
+	return c.Service.Event.Emit(ctx, c.Config.Registry.Id, *c.Config.Bus.Name, detailType, detail)
 }
 
 func (c Convention) Find(ctx context.Context, d deployment.Deployment, bus, rule string) (Subscription, error) {
