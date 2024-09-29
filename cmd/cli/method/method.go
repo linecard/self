@@ -16,7 +16,6 @@ import (
 	"github.com/linecard/self/pkg/sdk"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/rs/zerolog/log"
@@ -85,13 +84,7 @@ func PublishRelease(ctx context.Context, api sdk.API, p *param.Publish) error {
 		ctx, span := otel.Tracer("").Start(ctx, "notify")
 		defer span.End()
 
-		carrier := propagation.MapCarrier{}
-		otel.GetTextMapPropagator().Inject(ctx, carrier)
-
 		detail := config.EventDetail{
-			Traceparent:    carrier["traceparent"],
-			Tracestate:     carrier["tracestate"],
-			Action:         "Deploy",
 			Sha:            buildtime.Sha.Decoded,
 			Branch:         buildtime.Branch.Decoded,
 			Origin:         buildtime.Origin.Decoded,
@@ -100,7 +93,7 @@ func PublishRelease(ctx context.Context, api sdk.API, p *param.Publish) error {
 			ExceptAccounts: p.ExceptAccounts,
 		}
 
-		if err := api.Bus.Emit(ctx, detail); err != nil {
+		if err := api.Bus.Emit(ctx, "Deploy", detail); err != nil {
 			return err
 		}
 	}
@@ -178,7 +171,7 @@ func DestroyDeployment(ctx context.Context, api sdk.API, p *param.Destroy) error
 }
 
 func UntagRelease(ctx context.Context, api sdk.API, p *param.Untag) error {
-	ctx, span := otel.Tracer("").Start(ctx, "release")
+	ctx, span := otel.Tracer("").Start(ctx, "untag")
 	defer span.End()
 
 	buildtime, err := api.Config.BuildTime(p.FunctionArg.Path)
@@ -203,13 +196,7 @@ func UntagRelease(ctx context.Context, api sdk.API, p *param.Untag) error {
 		ctx, span := otel.Tracer("").Start(ctx, "notify")
 		defer span.End()
 
-		carrier := propagation.MapCarrier{}
-		otel.GetTextMapPropagator().Inject(ctx, carrier)
-
 		detail := config.EventDetail{
-			Traceparent:    carrier["traceparent"],
-			Tracestate:     carrier["tracestate"],
-			Action:         "Destroy",
 			Sha:            buildtime.Sha.Decoded,
 			Branch:         buildtime.Branch.Decoded,
 			Origin:         buildtime.Origin.Decoded,
@@ -217,7 +204,7 @@ func UntagRelease(ctx context.Context, api sdk.API, p *param.Untag) error {
 			ResourceName:   buildtime.Computed.Resource.Name,
 		}
 
-		err := api.Bus.Emit(ctx, detail)
+		err := api.Bus.Emit(ctx, "Destroy", detail)
 
 		if err != nil {
 			return err
